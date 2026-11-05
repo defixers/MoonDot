@@ -1,6 +1,6 @@
 # SignPath 申请准备
 
-状态：**未申请、未提交**。2026-11-05 用户确认 GitHub 与 SignPath 均尚未配置。本文是可用于后续申请的资料清单，不代表已经获得服务或证书。
+状态：**未申请、未提交**。2026-11-05 已确认公开 GitHub 仓库为 https://github.com/defixers/MoonDot；SignPath 尚未申请。本文是可用于后续申请的资料清单，不代表已经获得服务或证书。
 
 ## 可直接使用的项目说明
 
@@ -13,7 +13,7 @@
 
 ## 仍需项目负责人提供
 
-- 公开 GitHub 仓库 URL、项目主页与维护者联系信息。
+- 项目主页与维护者联系信息（公开仓库 URL 已确认）。
 - SignPath 组织/账号归属和申请人的授权身份。
 - 服务当前申请资格、开源计划适用性及服务方要求的其他资料；以 SignPath 官方申请要求为准。
 - 获批后的 organization ID、project slug、signing policy slug、publisher identity 以及授权/审批流程。

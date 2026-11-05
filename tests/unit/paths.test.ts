@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -25,7 +25,11 @@ it('rejects traversal, sibling-prefix tricks, absolute paths, streams and symlin
   const outside = join(root, 'library-other')
   mkdirSync(library)
   mkdirSync(outside)
-  expect(resolveInside(library, '中文/new.wav')).toBe(join(library, '中文/new.wav'))
+  const canonicalLibrary = realpathSync(library)
+  expect(resolveInside(library, '中文/new.wav')).toBe(join(canonicalLibrary, '中文/new.wav'))
+  const alias = join(root, 'library-alias')
+  symlinkSync(library, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  expect(resolveInside(alias, '中文/new.wav')).toBe(join(canonicalLibrary, '中文/new.wav'))
   for (const path of ['../library-other/a', '../../a', outside, 'file.wav:payload'])
     expect(() => resolveInside(library, path)).toThrow()
   symlinkSync(outside, join(library, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
