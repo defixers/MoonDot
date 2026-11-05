@@ -3,13 +3,14 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { foundationMigration } from './migrations/0001-foundation'
+import { projectsMigration } from './migrations/0002-projects'
 
 export interface Migration {
   version: number
   name: string
   sql: string
 }
-export const migrations: readonly Migration[] = [foundationMigration]
+export const migrations: readonly Migration[] = [foundationMigration, projectsMigration]
 const checksum = (migration: Migration) => createHash('sha256').update(migration.sql).digest('hex')
 
 export async function migrateDatabase(

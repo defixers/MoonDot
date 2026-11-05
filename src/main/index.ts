@@ -16,6 +16,9 @@ import {
 } from '../shared/channels'
 import { profileSchema } from '../shared/settings'
 import { systemHealthSchema } from '../shared/system'
+import { WORK_METHODS, workChannel } from '../shared/channels'
+import { workSchemas, type WorkMethod, type WorkInput } from '../shared/work'
+import { createWorkService } from './services/work'
 
 const paths = applicationPaths(
   app.getPath('appData'),
@@ -61,6 +64,7 @@ if (!app.requestSingleInstanceLock()) {
       settings = createSettingsService(database)
       const service = settings
       const connection = database
+      const work = createWorkService(connection.sqlite, () => service.getProfile().displayName)
       const trusted = (event: Electron.IpcMainInvokeEvent) =>
         !!mainWindow &&
         !mainWindow.isDestroyed() &&
@@ -96,6 +100,18 @@ if (!app.requestSingleInstanceLock()) {
         PROFILE_SAVE_CHANNEL,
         validatedHandler(profileSchema, (input) => service.saveProfile(input), trusted, report),
       )
+      const registerWork = <K extends WorkMethod>(method: K) => {
+        ipcMain.handle(
+          workChannel(method),
+          validatedHandler(
+            workSchemas[method] as unknown as z.ZodType<WorkInput<K>>,
+            (input) => work[method](input),
+            trusted,
+            report,
+          ),
+        )
+      }
+      WORK_METHODS.forEach(registerWork)
       installMenu()
       mainWindow = createMainWindow(service, report)
       app.on('activate', showWindow)

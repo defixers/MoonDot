@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { LayoutDashboard, Settings, Info } from '@lucide/vue'
+import { LayoutDashboard, Settings, Info, Folder, CheckSquare, Layers } from '@lucide/vue'
 import { useRoute } from 'vue-router'
 import { NAlert, NButton, NConfigProvider, zhCN, dateZhCN } from 'naive-ui'
 import { useWorkspaceStore } from './stores/workspace'
+import GlobalSearch from './components/GlobalSearch.vue'
 const workspace = useWorkspaceStore()
 const route = useRoute()
 const content = ref<HTMLElement>()
@@ -61,6 +62,25 @@ onMounted(workspace.load)
             <span class="nav-label">工作台</span>
           </RouterLink>
           <RouterLink
+            v-for="item in [
+              { path: '/projects', label: '项目', icon: Folder },
+              { path: '/tasks', label: '我的任务', icon: CheckSquare },
+              { path: '/templates', label: '阶段模板', icon: Layers },
+            ]"
+            :key="item.path"
+            :to="item.path"
+            class="nav-link"
+            active-class="selected"
+            :aria-label="item.label"
+          >
+            <component
+              :is="item.icon"
+              :size="18"
+              aria-hidden="true"
+            />
+            <span class="nav-label">{{ item.label }}</span>
+          </RouterLink>
+          <RouterLink
             to="/settings"
             class="nav-link"
             active-class="selected"
@@ -94,6 +114,7 @@ onMounted(workspace.load)
       <div class="workspace">
         <header class="topbar">
           <span>{{ route.meta.title }}</span>
+          <GlobalSearch />
           <span
             class="local-status"
             :class="{ offline: !workspace.connected }"

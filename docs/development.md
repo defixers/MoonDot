@@ -1,6 +1,6 @@
 # 开发环境
 
-本项目按开发方案 v1.8 维护 Electron + Vue 3 + TypeScript 开发骨架，Windows 发布路径为 Microsoft Store/MSIX。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第一阶段已加入本机显示名、窗口状态、数据库迁移和安全 IPC；项目、素材、预算和核心备份业务尚未实现。详见 [阶段验收记录](stage-1.md)。
+本项目按开发方案 v1.8 维护 Electron + Vue 3 + TypeScript 桌面应用，Windows 发布路径为 Microsoft Store/MSIX。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第二阶段已加入项目、阶段模板、任务看板、备注、全局搜索与本机工作偏好；素材、预算和核心备份业务仍属后续阶段。详见 [第二阶段验收记录](stage-2.md) 和 [第一阶段历史记录](stage-1.md)。
 
 ## 工具版本
 
@@ -66,7 +66,11 @@ Playwright 测试直接使用项目的 Electron，无需额外执行 `playwright
 - `MOONDOT_USER_DATA` 仅在未打包运行时覆盖数据目录，测试用它隔离数据。
 - `.pnpm-store`、`.cache`、`node_modules`、`out`、`release` 都是可重建的本地内容。
 
-数据库启用 WAL、外键、`synchronous=FULL` 和 5000ms busy timeout。当前 schema v1 包含 app_settings 和迁移历史，启动时先校验版本与 SQL 校验和，升级前生成在线快照并原子应用迁移。新增业务表需追加编号迁移，不得修改已应用迁移。
+数据库启用 WAL、外键、`synchronous=FULL` 和 5000ms busy timeout。当前 schema v2 在 v1 设置表与迁移历史上新增项目、阶段、模板、任务、备注、活动与 FTS5 索引。启动时先校验版本与 SQL 校验和，升级前生成在线快照并原子应用迁移。新增业务表需追加编号迁移，不得修改已应用迁移。
+
+业务契约在 `src/shared/work.ts`，主进程服务在 `src/main/services/work.ts`，受现有 trusted sender 校验保护。业务查询使用参数化 SQLite SQL（包含 FTS5 与事务），设置服务沿用 Drizzle；业务表结构以编号 SQL 迁移为准，不用 `drizzle-kit push` 修改本地数据库。preload 仅运行纯通道常量与 IPC 转发，不能运行时导入 Zod/数据库依赖，否则 Electron sandbox 会拒绝加载。
+
+新增功能后执行 `pnpm.cmd check`，依次运行 lint、格式、Vitest、类型检查、构建及真实 Electron 测试。项目闭环测试使用独立数据库并验证重启恢复，截图在 `test-results/`。开发模式首次打开旧 v1 数据时自动迁移；迁移快照位于 `userData/snapshots/migrations/`，不是核心备份。不要用 schema v1 程序打开已升级的数据库。
 
 素材库和核心备份目录仍应在业务开发时由用户选择。开发环境初始化不会选定素材盘或备份盘。
 
@@ -82,6 +86,8 @@ pnpm.cmd run doctor
 脚本安装 FFmpeg 9.0 LGPL shared 构建到 `resources/ffmpeg/win32-x64/`，校验 GitHub 资产摘要，保留 DLL、许可和 `source.json` 来源记录；不修改系统 PATH。详细要求及 macOS 布局见 [FFmpeg 说明](../resources/ffmpeg/README.md)。桌面壳目前尚未调用媒体工具。
 
 ## 本机验证记录
+
+2026-11-05，第二阶段 Windows x64：`pnpm.cmd check` 通过，包含 28 项单元/集成测试、5 项 Electron 测试、lint、格式、类型检查与生产构建。阶段状态显示调整后重新通过构建与 2 项项目界面测试。功能范围、演示步骤和限制见 [stage-2.md](stage-2.md)。以下 2026-11-04 记录为基础环境初始化时的历史结果。
 
 2026-11-04，Windows x64：
 
@@ -109,7 +115,7 @@ Windows 默认打包目标改为 `dir`，Store 入口单独调用 `appx` 通道�
 
 ## 开发边界和待办
 
-- 已完成第一阶段本地基础实现；外部门禁与当前验收状态以 stage-1.md 为准。
+- 第二阶段本地实现与验证以 [stage-2.md](stage-2.md) 为准；第一阶段 CI 成功记录不代表第二阶段已通过远程验证。
 - Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；Windows 与 macOS 15 arm64 CI 均通过，状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
 - 为保留方案要求的 macOS 12 支持，固定使用 Electron 43（Electron 44 起要求 macOS 13）。macOS 15 arm64 CI 已验证基础运行行为；macOS 12 最低版本、安装与 Gatekeeper 流程及人工交互仍需实测，后续升级 Electron 前应重新评估最低系统版本。
 - SignPath 申请未通过，停止接入。Partner Center 身份、MSIX 图标、商店资料/认证与完整发行许可材料列为发布待办；基础迁移已实现。

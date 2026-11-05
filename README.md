@@ -2,11 +2,11 @@
 
 音乐工程项目管理系统（MoonDot Music Project Management System）——完全本地运行的单机桌面应用，面向独立音乐人、制作人和录音棚。
 
-**当前阶段：第一阶段基础开发；已实现桌面基础界面、设置持久化、数据库迁移与安全 IPC，双平台目录构建 CI 已通过。Windows 发布方案已改为 Microsoft Store + MSIX，SignPath 申请未通过后停止接入；MSIX 构建入口已准备，Partner Center 尚未配置，商店认证与安装/升级实测仍待完成。第一阶段其余验收项见阶段记录。**
+**当前阶段：第二阶段“项目与检索”本地实现；已加入项目、阶段模板、任务看板、备注、全局搜索和工作偏好。数据库自动升级至 schema v2，并保留升级前快照。Windows 发布继续使用 Microsoft Store + MSIX；Partner Center 尚未配置，商店认证与安装/升级实测待完成。**
 
-第一阶段交付、演示步骤和待办见 [阶段验收记录](docs/stage-1.md)。
+当前交付、演示步骤和边界见 [第二阶段验收记录](docs/stage-2.md)；基础壳与历史验证见 [第一阶段记录](docs/stage-1.md)。
 
-通过记录：[2026-11-05 CI · 提交 8528097](https://github.com/defixers/MoonDot/actions/runs/41973439424)。
+历史基础版本通过记录：[2026-11-05 CI · 提交 8528097](https://github.com/defixers/MoonDot/actions/runs/41973439424)。第二阶段代码仍需提交后触发双平台 CI，不能沿用该结论。
 
 ## 本地开发
 

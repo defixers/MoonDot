@@ -5,8 +5,16 @@ import {
   PROFILE_SAVE_CHANNEL,
 } from '../shared/channels'
 import type { MoonDotApi } from '../shared/system'
+import type { WorkApi } from '../shared/work'
+import { workChannel, WORK_METHODS } from '../shared/channels'
 
 const api: MoonDotApi = {
+  work: Object.fromEntries(
+    WORK_METHODS.map((method) => [
+      method,
+      (input: unknown) => ipcRenderer.invoke(workChannel(method), input),
+    ]),
+  ) as WorkApi,
   system: { health: () => ipcRenderer.invoke(SYSTEM_HEALTH_CHANNEL) },
   settings: {
     getProfile: () => ipcRenderer.invoke(PROFILE_GET_CHANNEL),

@@ -4,10 +4,18 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openDatabase } from '../../src/main/db'
-import { migrateDatabase, migrations } from '../../src/main/db/migrator'
+import { migrateDatabase as migrateAll, type Migration } from '../../src/main/db/migrator'
+import { foundationMigration } from '../../src/main/db/migrations/0001-foundation'
 import { createSettingsService } from '../../src/main/services/settings'
 
 const connections: Database.Database[] = []
+// Keep failure/rollback fixtures scoped to v1; work.test.ts exercises the real v1 -> v2 upgrade.
+const migrations = [foundationMigration]
+const migrateDatabase = (
+  sqlite: Database.Database,
+  snapshots: string,
+  planned: readonly Migration[] = migrations,
+) => migrateAll(sqlite, snapshots, planned)
 const directories: string[] = []
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'moondot-迁移 测试-'))

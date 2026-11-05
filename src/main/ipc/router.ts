@@ -1,6 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { IpcResult } from '../../shared/system'
+import { WorkError } from '../services/work-error'
 
 export function isTrustedDocument(frameUrl: string, rendererUrl: string) {
   try {
@@ -32,6 +33,8 @@ export function validatedHandler<Input, Output>(
     try {
       return { ok: true, data: await action(parsed.data) }
     } catch (error) {
+      if (error instanceof WorkError)
+        return { ok: false, error: { code: error.code, message: error.message } }
       report(error)
       const code = String((error as { code?: unknown })?.code ?? '')
       return {

@@ -1,12 +1,41 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput } from 'naive-ui'
 import { useWorkspaceStore } from '../stores/workspace'
+import type { Preferences, Template } from '../../shared/work'
+import { result, work } from '../work'
 const workspace = useWorkspaceStore()
 const displayName = ref(workspace.profile.displayName)
 const saving = ref(false)
 const error = ref('')
 const saved = ref(false)
+const preferences = ref<Preferences>({
+    projectView: 'cards',
+    taskView: 'board',
+    defaultTemplateId: null,
+  }),
+  templates = ref<Template[]>([])
+onMounted(async () => {
+  try {
+    preferences.value = await result(work().preferences(undefined))
+    templates.value = await result(work().templates(undefined))
+  } catch (e) {
+    error.value = String(e)
+  }
+})
+async function savePreferences() {
+  saving.value = true
+  saved.value = false
+  error.value = ''
+  try {
+    preferences.value = await result(work().savePreferences({ ...preferences.value }))
+    saved.value = true
+  } catch (e) {
+    error.value = String(e)
+  } finally {
+    saving.value = false
+  }
+}
 watch(
   () => workspace.profile.displayName,
   (name) => {
@@ -77,6 +106,60 @@ async function save() {
         {{ error }}
       </NAlert>
     </NForm>
+  </NCard>
+  <NCard
+    title="工作偏好"
+    class="notice"
+  >
+    <form
+      class="form-stack"
+      @submit.prevent="savePreferences"
+    >
+      <div class="form-grid">
+        <label>
+          默认项目视图
+          <select
+            v-model="preferences.projectView"
+            aria-label="默认项目视图"
+          >
+            <option value="cards">卡片</option>
+            <option value="table">表格</option>
+          </select>
+        </label>
+        <label>
+          默认任务视图
+          <select
+            v-model="preferences.taskView"
+            aria-label="默认任务视图"
+          >
+            <option value="board">看板</option>
+            <option value="list">列表</option>
+          </select>
+        </label>
+        <label>
+          默认阶段模板
+          <select
+            v-model="preferences.defaultTemplateId"
+            aria-label="默认阶段模板"
+          >
+            <option :value="null">使用首个模板</option>
+            <option
+              v-for="item in templates"
+              :key="item.id"
+              :value="item.id"
+            >
+              {{ item.name }}
+            </option>
+          </select>
+        </label>
+      </div>
+      <button
+        class="primary"
+        :disabled="saving"
+      >
+        保存工作偏好
+      </button>
+    </form>
   </NCard>
   <NCard
     title="素材与核心备份"
