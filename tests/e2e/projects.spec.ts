@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
@@ -12,7 +21,8 @@ import { phases } from '../../src/shared/work'
 import type { MoonDotApi } from '../../src/shared/system'
 
 async function environment() {
-  const directory = await mkdtemp(join(tmpdir(), 'moondot-remake-ui-'))
+  // Match the canonical paths displayed by the app (macOS /var resolves to /private/var).
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'moondot-remake-ui-')))
   const env = Object.fromEntries(
     Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined),
   )

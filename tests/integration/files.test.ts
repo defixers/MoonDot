@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -183,6 +184,6 @@ it('reports missing disks and validates relinking without moving files', async (
   renameSync(f.projectRoot, moved)
   expect(() => f.files.files(f.location)).toThrow('目录')
   f.work.relocateProject({ id: f.location.projectId, directory: moved })
-  expect(f.files.files(f.location).path).toBe(join(moved, phases[0].folder))
+  expect(f.files.files(f.location).path).toBe(realpathSync(join(moved, phases[0].folder)))
   expect(existsSync(f.projectRoot)).toBe(false)
 })

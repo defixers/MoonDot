@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -168,27 +169,40 @@ it('locks projects during deletion and keeps pending records across the seven-da
   expect(trash).toHaveBeenCalledTimes(1)
   expect(deletion.projects({ ...list, trash: true }).total).toBe(0)
 })
-it('creates the default moondot folder under the supplied system Documents path and supports explicit overrides', async () => {
-  const { root, database, draft } = await fixture()
-  const documents = join(root, 'redirected-documents')
-  mkdirSync(documents)
-  const service = createWorkService(
-    database.sqlite,
-    () => Date.now(),
-    () => false,
-    () => defaultProjectDirectory(documents),
-  )
-  expect(service.defaultProjectDirectory().directory).toBe(join(documents, 'moondot'))
-  const first = service.saveProject(draft({ parentDirectory: undefined }))
-  expect(service.project(first).rootDirectory).toBe(join(documents, 'moondot', '月光'))
-  const second = service.saveProject(draft({ name: 'custom' }))
-  expect(service.project(second).rootDirectory).toBe(join(root, 'custom'))
-  const blocked = join(root, 'blocked-documents')
-  mkdirSync(blocked)
-  writeFileSync(join(blocked, 'moondot'), 'occupied')
-  expect(() => defaultProjectDirectory(blocked)).toThrow()
-  expect(readFileSync(join(blocked, 'moondot'), 'utf8')).toBe('occupied')
-})
+it.each([false, true])(
+  'creates projects under Documents and custom locations (directory alias: %s)',
+  async (useAlias) => {
+    const { root, database, draft } = await fixture()
+    let documents = join(root, 'redirected-documents')
+    mkdirSync(documents)
+    if (useAlias) {
+      const alias = join(root, 'documents-alias')
+      symlinkSync(documents, alias, process.platform === 'win32' ? 'junction' : 'dir')
+      documents = alias
+    }
+    const service = createWorkService(
+      database.sqlite,
+      () => Date.now(),
+      () => false,
+      () => defaultProjectDirectory(documents),
+    )
+    // macOS /var paths and user-selected aliases resolve to a different canonical path.
+    expect(service.defaultProjectDirectory().directory).toBe(
+      realpathSync(join(documents, 'moondot')),
+    )
+    const first = service.saveProject(draft({ parentDirectory: undefined }))
+    expect(service.project(first).rootDirectory).toBe(
+      realpathSync(join(documents, 'moondot', '月光')),
+    )
+    const second = service.saveProject(draft({ name: 'custom' }))
+    expect(service.project(second).rootDirectory).toBe(realpathSync(join(root, 'custom')))
+    const blocked = join(root, 'blocked-documents')
+    mkdirSync(blocked)
+    writeFileSync(join(blocked, 'moondot'), 'occupied')
+    expect(() => defaultProjectDirectory(blocked)).toThrow()
+    expect(readFileSync(join(blocked, 'moondot'), 'utf8')).toBe('occupied')
+  },
+)
 it('creates fixed folders with no personnel/dates and persists all edits without changing completion or disk name', async () => {
   const { root, database, service, draft } = await fixture()
   const { id } = service.saveProject(draft())
@@ -293,7 +307,7 @@ it('restores moved directories only after relinking and purges records precisely
   renameSync(original, relocated)
   expect(() => service.restoreProject({ id })).toThrow()
   service.restoreProject({ id, directory: relocated })
-  expect(service.project({ id }).rootDirectory).toBe(relocated)
+  expect(service.project({ id }).rootDirectory).toBe(realpathSync(relocated))
   service.trashProject({ id })
   advance(RETENTION_MS - 1)
   expect(service.cleanup()).toBe(0)

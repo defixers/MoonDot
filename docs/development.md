@@ -103,6 +103,8 @@ pnpm.cmd run doctor
 
 ## 跨平台 CI 验证记录
 
+2026-11-06，[运行 42061216830](https://github.com/defixers/MoonDot/actions/runs/42061216830) 验证提交 `4c6b659`：Windows 通过，macOS 在三项集成测试的路径断言处失败，尚未进入编译及打包。原因是 macOS 临时目录的 `/var/...` 别名经 `realpath` 解析为 `/private/var/...`，测试却直接比较原始字符串。现已将相关断言改为比较真实路径，并统一项目 Electron 测试的临时根目录；增加目录别名用例在 Windows 上覆盖相同差异。修复的 macOS CI 结果仍需推送新提交后验证。
+
 2026-11-05，[运行 41973439424](https://github.com/defixers/MoonDot/actions/runs/41973439424) 验证提交 `8528097`：Windows 与 macOS 15 arm64 均通过 lint、格式检查、12 项单元/集成测试、类型检查、生产构建、3 项 Electron 测试、未签名目录构建及测试截图上传。macOS 关闭最后一个窗口后保留进程、`activate` 重建窗口的行为已通过测试。
 
 CI 使用 `electron-builder --dir`，尚未验证 MSIX/DMG/ZIP 安装流程、打包后应用启动、商店签名或最低系统版本。修复后需推送新提交触发 CI；GitHub 的重新运行操作仍使用原运行的提交，应核对运行页面的 commit SHA。
