@@ -25,7 +25,8 @@ const paths = applicationPaths(
 )
 ensureApplicationPaths(paths)
 app.setPath('userData', paths.userData)
-app.setAppUserModelId('com.moondot.app')
+// Store packages use the AUMID assigned from their package identity and Application.Id.
+if (!process.windowsStore) app.setAppUserModelId('com.moondot.app')
 log.transports.file.resolvePathFn = () => join(paths.logs, 'main.log')
 log.transports.file.maxSize = 10 * 1024 * 1024
 const report = (error: unknown) => {

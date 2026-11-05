@@ -17,7 +17,6 @@ MoonDot（月句）© 2026 归尘回梦。项目代码采用 **MIT License**，�
 | Zod | 运行时校验 | MIT |
 | wavesurfer.js | 音频波形 | BSD-3-Clause |
 | Apache ECharts | 图表 | Apache-2.0 |
-| electron-updater | 自动更新 | MIT |
 | electron-builder | 安装包构建 | MIT |
 | FFmpeg / ffprobe | 音频元数据、波形、代理 | LGPL-2.1-or-later（以实际构建为准） |
 

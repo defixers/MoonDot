@@ -16,11 +16,8 @@ npmRebuild: true
 publish: null
 win:
   target:
-    - target: nsis
+    - target: dir
       arch: [x64]
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
 mac:
   target:
     - target: dmg

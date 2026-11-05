@@ -25,7 +25,8 @@
     "test:unit": "vitest run",
     "check": "pnpm lint && pnpm format:check && pnpm test:unit && pnpm build && pnpm test",
     "pack": "pnpm build && electron-builder --dir --publish never",
-    "dist:win": "pnpm build && electron-builder --win --x64 --publish never",
+    "dist:win": "pnpm run msix:check && pnpm build && node scripts/build-msix.mjs",
+    "msix:check": "node scripts/build-msix.mjs --check",
     "dist:mac": "pnpm build && electron-builder --mac --arm64 --publish never",
     "doctor": "node scripts/doctor.mjs"
   },
@@ -36,7 +37,6 @@
     "drizzle-orm": "0.45.4",
     "echarts": "6.1.0",
     "electron-log": "5.4.4",
-    "electron-updater": "6.8.11",
     "naive-ui": "2.45.3",
     "pinia": "4.1.0",
     "vue": "3.5.44",

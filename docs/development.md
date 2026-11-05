@@ -1,6 +1,6 @@
 # 开发环境
 
-本项目按开发方案 v1.7 建立 Electron + Vue 3 + TypeScript 开发骨架。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第一阶段已加入本机显示名、窗口状态、数据库迁移和安全 IPC；项目、素材、预算和核心备份业务尚未实现。详见 [阶段验收记录](stage-1.md)。
+本项目按开发方案 v1.8 维护 Electron + Vue 3 + TypeScript 开发骨架，Windows 发布路径为 Microsoft Store/MSIX。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第一阶段已加入本机显示名、窗口状态、数据库迁移和安全 IPC；项目、素材、预算和核心备份业务尚未实现。详见 [阶段验收记录](stage-1.md)。
 
 ## 工具版本
 
@@ -48,7 +48,8 @@ pnpm.cmd run rebuild
 | `pnpm test:unit`                    | Vitest 基础单元与 SQLite 迁移集成测试                              |
 | `pnpm check`                        | 代码检查、格式检查、构建、Electron 冒烟测试                        |
 | `pnpm run pack`                     | 生成当前平台未签名的解包应用                                       |
-| `pnpm dist:win`                     | Windows x64 NSIS 内测安装包，不发布                                |
+| `pnpm run msix:check`               | 校验 Partner Center 包身份和 MSIX 配置，不构建或提交               |
+| `pnpm dist:win`                     | 构建 Windows x64 MSIX 提交包，需配置 Store 身份；不签名、不发布    |
 | `pnpm dist:mac`                     | 在 macOS Apple Silicon 上构建 arm64 DMG/ZIP，不发布                |
 
 Playwright 测试直接使用项目的 Electron，无需额外执行 `playwright install` 下载浏览器。测试使用独立临时目录并在结束后清理。当前 better-sqlite3 13 使用 Node-API 预编译包，已验证可在 Node 24 的 Vitest 和 Electron 43 中加载。以后更换原生模块版本或重编译方式时，需重新检查两种运行时兼容性。
@@ -61,6 +62,7 @@ Playwright 测试直接使用项目的 Electron，无需额外执行 `playwright
 - `src/shared`：类型、通道常量、Zod 契约。
 - 开发数据库：`.local/userData/data/moondot.db`，不进入版本控制。
 - 正式应用数据库：Windows `%APPDATA%/MoonDot/data/moondot.db`；macOS `~/Library/Application Support/MoonDot/data/moondot.db`。
+- Store MSIX 的 AppData 可能由系统重定向/虚拟化；包安装后的实际路径、旧桌面版数据导入与卸载行为须单独验证，不能把上述普通桌面版路径当作 Store 数据迁移保证。
 - `MOONDOT_USER_DATA` 仅在未打包运行时覆盖数据目录，测试用它隔离数据。
 - `.pnpm-store`、`.cache`、`node_modules`、`out`、`release` 都是可重建的本地内容。
 
@@ -97,12 +99,18 @@ pnpm.cmd run doctor
 
 2026-11-05，[运行 41973439424](https://github.com/defixers/MoonDot/actions/runs/41973439424) 验证提交 `8528097`：Windows 与 macOS 15 arm64 均通过 lint、格式检查、12 项单元/集成测试、类型检查、生产构建、3 项 Electron 测试、未签名目录构建及测试截图上传。macOS 关闭最后一个窗口后保留进程、`activate` 重建窗口的行为已通过测试。
 
-CI 使用 `electron-builder --dir`，尚未验证 NSIS/DMG/ZIP 安装流程、打包后应用启动、签名或最低系统版本。修复后需推送新提交触发 CI；GitHub 的重新运行操作仍使用原运行的提交，应核对运行页面的 commit SHA。
+CI 使用 `electron-builder --dir`，尚未验证 MSIX/DMG/ZIP 安装流程、打包后应用启动、商店签名或最低系统版本。修复后需推送新提交触发 CI；GitHub 的重新运行操作仍使用原运行的提交，应核对运行页面的 commit SHA。
+
+## Windows Store 构建
+
+详见 [Microsoft Store / MSIX](microsoft-store.md)。`dist:win` 从环境读取 Partner Center 的 Identity Name、Publisher 和 Publisher Display Name，配置缺失会在编译前失败。普通目录构建与 CI 不需要这些字段。当前未配置 Partner Center，未生成正式 MSIX，也未提交商店。
+
+Windows 默认打包目标改为 `dir`，Store 入口单独调用 `appx` 通道并指定 `.msix` 输出；原 NSIS 配置与未使用的 `electron-updater` 依赖已移除。商店应用由系统管理 AUMID 和更新；未来 Store 安装、更新、数据保留及核心备份流程须按新的发布约束验收。
 
 ## 开发边界和待办
 
 - 已完成第一阶段本地基础实现；外部门禁与当前验收状态以 stage-1.md 为准。
 - Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；Windows 与 macOS 15 arm64 CI 均通过，状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
 - 为保留方案要求的 macOS 12 支持，固定使用 Electron 43（Electron 44 起要求 macOS 13）。macOS 15 arm64 CI 已验证基础运行行为；macOS 12 最低版本、安装与 Gatekeeper 流程及人工交互仍需实测，后续升级 Electron 前应重新评估最低系统版本。
-- SignPath 申请、安装器图标、GitHub 更新通道与完整发行许可材料仍待相应阶段配置；基础迁移已实现。
+- SignPath 申请未通过，停止接入。Partner Center 身份、MSIX 图标、商店资料/认证与完整发行许可材料列为发布待办；基础迁移已实现。
 - 不配置账号、云端、遥测或自动上传。当前骨架未启用自动更新。
