@@ -93,10 +93,16 @@ pnpm.cmd run doctor
 
 本记录不包含 macOS 实机、安装包、签名或业务功能验收。
 
+## 跨平台 CI 验证记录
+
+2026-11-05，[运行 41973439424](https://github.com/defixers/MoonDot/actions/runs/41973439424) 验证提交 `8528097`：Windows 与 macOS 15 arm64 均通过 lint、格式检查、12 项单元/集成测试、类型检查、生产构建、3 项 Electron 测试、未签名目录构建及测试截图上传。macOS 关闭最后一个窗口后保留进程、`activate` 重建窗口的行为已通过测试。
+
+CI 使用 `electron-builder --dir`，尚未验证 NSIS/DMG/ZIP 安装流程、打包后应用启动、签名或最低系统版本。修复后需推送新提交触发 CI；GitHub 的重新运行操作仍使用原运行的提交，应核对运行页面的 commit SHA。
+
 ## 开发边界和待办
 
 - 已完成第一阶段本地基础实现；外部门禁与当前验收状态以 stage-1.md 为准。
-- Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；Windows CI 检查与目录构建已通过，macOS 窗口生命周期测试修复待复验，状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
-- 为保留方案要求的 macOS 12 支持，固定使用 Electron 43（Electron 44 起要求 macOS 13）。macOS 仍需在真实 Apple Silicon 设备上验证；后续升级 Electron 前应重新评估最低系统版本。
+- Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；Windows 与 macOS 15 arm64 CI 均通过，状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
+- 为保留方案要求的 macOS 12 支持，固定使用 Electron 43（Electron 44 起要求 macOS 13）。macOS 15 arm64 CI 已验证基础运行行为；macOS 12 最低版本、安装与 Gatekeeper 流程及人工交互仍需实测，后续升级 Electron 前应重新评估最低系统版本。
 - SignPath 申请、安装器图标、GitHub 更新通道与完整发行许可材料仍待相应阶段配置；基础迁移已实现。
 - 不配置账号、云端、遥测或自动上传。当前骨架未启用自动更新。
