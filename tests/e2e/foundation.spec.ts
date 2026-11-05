@@ -109,10 +109,20 @@ test('设置通过主进程持久化，重启保留窗口状态并展示许可�
     await expect(page.getByTestId('project-license')).toContainText('Permission is hereby granted')
     await expect(page.getByText('Third-Party Notices', { exact: false })).toBeVisible()
     if (process.platform === 'darwin') {
-      await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
-      expect(
-        await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
-      ).toBe(0)
+      // close() starts the native close flow; wait for destruction before testing activation.
+      await application.evaluate(
+        ({ BrowserWindow }) =>
+          new Promise<void>((resolveClosed) => {
+            const window = BrowserWindow.getAllWindows()[0]!
+            window.once('closed', () => resolveClosed())
+            window.close()
+          }),
+      )
+      await expect
+        .poll(() =>
+          application!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
+        )
+        .toBe(0)
       const reopened = application.waitForEvent('window')
       await application.evaluate(({ app }) => app.emit('activate'))
       await expect(

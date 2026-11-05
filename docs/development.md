@@ -96,7 +96,7 @@ pnpm.cmd run doctor
 ## 开发边界和待办
 
 - 已完成第一阶段本地基础实现；外部门禁与当前验收状态以 stage-1.md 为准。
-- Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；首次 Windows/macOS CI 已运行但未通过，修复与验收状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
+- Git `main` 分支已关联公开远程仓库 https://github.com/defixers/MoonDot；Windows CI 检查与目录构建已通过，macOS 窗口生命周期测试修复待复验，状态见 [第一阶段记录](stage-1.md)。`.gitattributes` 统一文本检出为 LF，避免 Windows 的 `core.autocrlf` 导致格式检查差异。
 - 为保留方案要求的 macOS 12 支持，固定使用 Electron 43（Electron 44 起要求 macOS 13）。macOS 仍需在真实 Apple Silicon 设备上验证；后续升级 Electron 前应重新评估最低系统版本。
 - SignPath 申请、安装器图标、GitHub 更新通道与完整发行许可材料仍待相应阶段配置；基础迁移已实现。
 - 不配置账号、云端、遥测或自动上传。当前骨架未启用自动更新。
