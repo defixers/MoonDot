@@ -15,20 +15,14 @@ const router = createRouter({
       meta: { title: '项目' },
     },
     {
-      path: '/projects/:id/:tab(overview|tasks|activity)',
+      path: '/projects/:id',
       component: () => import('./views/ProjectView.vue'),
       meta: { title: '项目详情' },
     },
-    { path: '/projects/:id', redirect: (to) => `/projects/${to.params.id}/overview` },
     {
-      path: '/tasks',
-      component: () => import('./views/TasksView.vue'),
-      meta: { title: '我的任务' },
-    },
-    {
-      path: '/templates',
-      component: () => import('./views/TemplatesView.vue'),
-      meta: { title: '阶段模板' },
+      path: '/trash',
+      component: () => import('./views/ProjectsView.vue'),
+      meta: { title: '项目回收站' },
     },
     {
       path: '/settings',

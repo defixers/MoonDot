@@ -1,6 +1,6 @@
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import type { IpcResult } from '../shared/system'
-import type { Mutation, Project } from '../shared/work'
+import { emptyStages, type ProjectDraft } from '../shared/work'
 
 export async function result<T>(request: Promise<IpcResult<T>>): Promise<T> {
   const response = await request
@@ -8,44 +8,15 @@ export async function result<T>(request: Promise<IpcResult<T>>): Promise<T> {
   return response.data
 }
 export const work = () => window.moondot.work
-export async function allProjects(): Promise<Project[]> {
-  const projects: Project[] = []
-  for (let page = 1; ; page++) {
-    const data = await result(
-      work().projects({
-        query: '',
-        status: '',
-        tag: '',
-        stage: '',
-        dueBefore: '',
-        trash: false,
-        sort: 'updated',
-        page,
-        pageSize: 100,
-      }),
-    )
-    projects.push(...data.items)
-    if (projects.length >= data.total || !data.items.length) return projects
-  }
-}
-export function useActions(refresh: () => void | Promise<void>) {
+export function useActions(refresh: () => void | Promise<void> = () => {}) {
   const error = ref(''),
-    busy = ref(false),
-    undoToken = ref('')
-  let timer: ReturnType<typeof setTimeout> | undefined
-  onUnmounted(() => clearTimeout(timer))
+    busy = ref(false)
   async function run(action: () => Promise<unknown>) {
     if (busy.value) return
     busy.value = true
     error.value = ''
     try {
-      const outcome = (await action()) as Mutation | undefined
-      clearTimeout(timer)
-      undoToken.value = outcome?.undoToken ?? ''
-      if (undoToken.value)
-        timer = setTimeout(() => {
-          undoToken.value = ''
-        }, 5000)
+      await action()
       await refresh()
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : '操作失败，请重试'
@@ -53,22 +24,22 @@ export function useActions(refresh: () => void | Promise<void>) {
       busy.value = false
     }
   }
-  const reverse = () => run(() => result(work().undo({ token: undoToken.value })))
-  return { error, busy, undoToken, run, reverse }
+  return { error, busy, run }
 }
-export const projectDefaults = {
+export const projectDefaults = (): ProjectDraft => ({
   name: '',
-  artist: '',
-  type: 'single' as const,
-  genre: '',
-  bpm: null,
-  musicalKey: '',
-  dueDate: '',
-  participants: '',
+  type: 'single',
   description: '',
-  tags: [] as string[],
-  color: '#2563eb',
   cover: '',
-  status: 'planning' as const,
-  initialTasks: true,
-}
+  dueDate: '',
+  stages: emptyStages(),
+})
+export const displayTime = (value: string) =>
+  new Date(value).toLocaleString('zh-CN', { hour12: false })
+export const listQuery = () => ({
+  query: '',
+  status: '' as '' | 'incomplete' | 'completed',
+  trash: false,
+  page: 1,
+  pageSize: 12,
+})

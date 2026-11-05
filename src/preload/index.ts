@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   SYSTEM_HEALTH_CHANNEL,
   PROFILE_GET_CHANNEL,
@@ -9,6 +9,7 @@ import type { WorkApi } from '../shared/work'
 import { workChannel, WORK_METHODS } from '../shared/channels'
 
 const api: MoonDotApi = {
+  pathsForFiles: (files) => files.map((file) => webUtils.getPathForFile(file)).filter(Boolean),
   work: Object.fromEntries(
     WORK_METHODS.map((method) => [
       method,

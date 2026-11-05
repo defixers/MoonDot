@@ -7,7 +7,6 @@ import { result, work } from '../work'
 const router = useRouter(),
   show = ref(false),
   query = ref(''),
-  archived = ref(false),
   hits = ref<SearchHit[]>([]),
   busy = ref(false),
   error = ref(''),
@@ -26,7 +25,7 @@ onUnmounted(() => {
   clearTimeout(timer)
   sequence++
 })
-watch([query, archived, show], () => {
+watch([query, show], () => {
   const ticket = ++sequence
   clearTimeout(timer)
   hits.value = []
@@ -36,32 +35,22 @@ watch([query, archived, show], () => {
   busy.value = true
   timer = setTimeout(async () => {
     try {
-      const items = await result(
-        work().search({ query: query.value.trim(), includeArchived: archived.value }),
-      )
+      const items = await result(work().search({ query: query.value.trim() }))
       if (ticket === sequence) hits.value = items
-    } catch (e) {
-      if (ticket === sequence) error.value = String(e)
+    } catch (cause) {
+      if (ticket === sequence) error.value = (cause as Error).message
     } finally {
       if (ticket === sequence) busy.value = false
     }
   }, 200)
 })
-function open(hit: SearchHit) {
-  show.value = false
-  void router.push(
-    hit.taskId
-      ? { path: `/projects/${hit.projectId}/tasks`, query: { task: hit.taskId } }
-      : `/projects/${hit.projectId}/overview`,
-  )
-}
 </script>
 <template>
   <button
     class="search-trigger"
     @click="show = true"
   >
-    搜索项目、任务与备注
+    搜索项目、备注与人员
     <kbd>Ctrl / ⌘ K</kbd>
   </button>
   <NModal
@@ -78,15 +67,8 @@ function open(hit: SearchHit) {
         v-model="query"
         type="search"
         maxlength="120"
-        placeholder="输入中文或英文关键词"
+        placeholder="项目名称、备注或人员"
       />
-    </label>
-    <label class="check-label">
-      <input
-        v-model="archived"
-        type="checkbox"
-      />
-      包括已归档项目
     </label>
     <p
       v-if="busy"
@@ -105,20 +87,21 @@ function open(hit: SearchHit) {
       v-if="!busy && !hits.length"
       class="muted"
     >
-      {{ query.trim() ? '没有找到匹配内容' : '搜索项目、任务标题、正文与备注。支持中文短词。' }}
+      {{ query.trim() ? '没有找到匹配内容' : '搜索项目名称、项目备注和岗位人员。支持中文短词。' }}
     </p>
     <div class="search-results">
       <button
         v-for="hit in hits"
-        :key="`${hit.kind}-${hit.id}`"
-        @click="open(hit)"
+        :key="hit.id"
+        @click="
+          () => {
+            show = false
+            router.push('/projects/' + hit.id)
+          }
+        "
       >
-        <small>
-          {{ hit.kind === 'project' ? '项目' : hit.kind === 'task' ? '任务' : '备注' }} ·
-          {{ hit.projectName }}
-        </small>
         <strong>{{ hit.title }}</strong>
-        <span>{{ hit.excerpt }}</span>
+        <span class="preserve-text">{{ hit.excerpt }}</span>
       </button>
     </div>
     <p

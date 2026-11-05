@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { LayoutDashboard, Settings, Info, Folder, CheckSquare, Layers } from '@lucide/vue'
+import { LayoutDashboard, Settings, Info, Folder, Trash2 } from '@lucide/vue'
 import { useRoute } from 'vue-router'
 import { NAlert, NButton, NConfigProvider, zhCN, dateZhCN } from 'naive-ui'
 import { useWorkspaceStore } from './stores/workspace'
@@ -64,8 +64,7 @@ onMounted(workspace.load)
           <RouterLink
             v-for="item in [
               { path: '/projects', label: '项目', icon: Folder },
-              { path: '/tasks', label: '我的任务', icon: CheckSquare },
-              { path: '/templates', label: '阶段模板', icon: Layers },
+              { path: '/trash', label: '项目回收站', icon: Trash2 },
             ]"
             :key="item.path"
             :to="item.path"

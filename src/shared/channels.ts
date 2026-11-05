@@ -1,11 +1,8 @@
 export const SYSTEM_HEALTH_CHANNEL = 'system:health'
 export const PROFILE_GET_CHANNEL = 'settings:get-profile'
 export const PROFILE_SAVE_CHANNEL = 'settings:save-profile'
-// Kept free of runtime schema imports: sandboxed preload cannot require arbitrary Node modules.
+// Keep runtime schema imports out of the sandboxed preload.
 export const WORK_METHODS = [
-  'templates',
-  'saveTemplate',
-  'deleteTemplate',
   'projects',
   'project',
   'saveProject',
@@ -13,17 +10,21 @@ export const WORK_METHODS = [
   'trashProject',
   'restoreProject',
   'purgeProject',
-  'stageState',
-  'tasks',
-  'saveTask',
-  'moveTask',
-  'trashTask',
-  'restoreTask',
-  'saveNote',
-  'deleteNote',
+  'deleteProjectFiles',
+  'relocateProject',
   'search',
-  'preferences',
-  'savePreferences',
-  'undo',
+  'chooseDirectory',
+  'defaultProjectDirectory',
+  'checkDirectory',
+  'chooseImports',
+  'files',
+  'createFolder',
+  'renameFile',
+  'trashFile',
+  'openFolder',
+  'revealFile',
+  'startImport',
+  'importStatus',
+  'cancelImport',
 ] as const
 export const workChannel = (method: (typeof WORK_METHODS)[number]) => `work:${method}`

@@ -1,6 +1,6 @@
 # 开发环境
 
-本项目按开发方案 v1.8 维护 Electron + Vue 3 + TypeScript 桌面应用，Windows 发布路径为 Microsoft Store/MSIX。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第二阶段已加入项目、阶段模板、任务看板、备注、全局搜索与本机工作偏好；素材、预算和核心备份业务仍属后续阶段。详见 [第二阶段验收记录](stage-2.md) 和 [第一阶段历史记录](stage-1.md)。
+本项目按开发方案 v1.8 维护 Electron + Vue 3 + TypeScript 桌面应用，Windows 发布路径为 Microsoft Store/MSIX。后端运行于 Electron 主进程，通过受限 preload API 与渲染进程通信；SQLite 无需单独安装服务。第二阶段已重做为五步项目向导、固定五阶段文件管理、七天项目回收站和项目/备注/人员搜索；音频素材库、预算和核心备份仍属后续阶段。详见 [第二阶段验收记录](stage-2.md) 和 [第一阶段历史记录](stage-1.md)。
 
 ## 工具版本
 
@@ -60,17 +60,17 @@ Playwright 测试直接使用项目的 Electron，无需额外执行 `playwright
 - `src/preload`：仅暴露白名单 API；启用 sandbox / contextIsolation，禁用 nodeIntegration。
 - `src/renderer`：Vue、Pinia、Vue Router、Naive UI；没有文件系统或数据库权限。
 - `src/shared`：类型、通道常量、Zod 契约。
-- 开发数据库：`.local/userData/data/moondot.db`，不进入版本控制。
-- 正式应用数据库：Windows `%APPDATA%/MoonDot/data/moondot.db`；macOS `~/Library/Application Support/MoonDot/data/moondot.db`。
+- 开发数据库：`.local/userData/data/moondot-remake.db`，不进入版本控制。
+- 正式应用数据库：Windows `%APPDATA%/MoonDot/data/moondot-remake.db`；macOS `~/Library/Application Support/MoonDot/data/moondot-remake.db`。
 - Store MSIX 的 AppData 可能由系统重定向/虚拟化；包安装后的实际路径、旧桌面版数据导入与卸载行为须单独验证，不能把上述普通桌面版路径当作 Store 数据迁移保证。
 - `MOONDOT_USER_DATA` 仅在未打包运行时覆盖数据目录，测试用它隔离数据。
 - `.pnpm-store`、`.cache`、`node_modules`、`out`、`release` 都是可重建的本地内容。
 
-数据库启用 WAL、外键、`synchronous=FULL` 和 5000ms busy timeout。当前 schema v2 在 v1 设置表与迁移历史上新增项目、阶段、模板、任务、备注、活动与 FTS5 索引。启动时先校验版本与 SQL 校验和，升级前生成在线快照并原子应用迁移。新增业务表需追加编号迁移，不得修改已应用迁移。
+数据库启用 WAL、外键、`synchronous=FULL` 和 5000ms busy timeout。新版数据库与旧的 `userData/data/moondot.db` 完全隔离，不迁移旧业务数据；旧库只用于一次性读取本机显示名与窗口状态。独立 schema v2 包含设置、项目及文件加入时间表，不含旧任务、模板和动态。启动时校验版本与 SQL 校验和，升级前生成在线快照并事务应用迁移。后续新版业务表变更必须追加编号迁移，不修改已应用的 SQL。
 
-业务契约在 `src/shared/work.ts`，主进程服务在 `src/main/services/work.ts`，受现有 trusted sender 校验保护。业务查询使用参数化 SQLite SQL（包含 FTS5 与事务），设置服务沿用 Drizzle；业务表结构以编号 SQL 迁移为准，不用 `drizzle-kit push` 修改本地数据库。preload 仅运行纯通道常量与 IPC 转发，不能运行时导入 Zod/数据库依赖，否则 Electron sandbox 会拒绝加载。
+业务契约在 `src/shared/work.ts`，项目服务在 `src/main/services/work.ts`，文件服务在 `src/main/services/files.ts`，均受 trusted sender 与严格入参校验保护。业务数据使用参数化 SQLite SQL 与事务，设置服务沿用 Drizzle；不使用 `drizzle-kit push` 修改本地数据库。preload 只运行纯通道常量、IPC 转发及 Electron 文件路径桥接，不在运行时导入 Zod 或数据库依赖。
 
-新增功能后执行 `pnpm.cmd check`，依次运行 lint、格式、Vitest、类型检查、构建及真实 Electron 测试。项目闭环测试使用独立数据库并验证重启恢复，截图在 `test-results/`。开发模式首次打开旧 v1 数据时自动迁移；迁移快照位于 `userData/snapshots/migrations/`，不是核心备份。不要用 schema v1 程序打开已升级的数据库。
+新增功能后执行 `pnpm.cmd check`，依次运行 lint、格式、Vitest、类型检查、构建及真实 Electron 测试。项目闭环测试使用独立临时数据库与文件目录，验证重启恢复，截图在 `test-results/`。迁移快照位于 `userData/snapshots/migrations/`，不是核心备份。旧库和新版库的迁移历史不同，不得交换文件或直接用新版迁移器处理旧库。
 
 素材库和核心备份目录仍应在业务开发时由用户选择。开发环境初始化不会选定素材盘或备份盘。
 
@@ -87,7 +87,7 @@ pnpm.cmd run doctor
 
 ## 本机验证记录
 
-2026-11-05，第二阶段 Windows x64：`pnpm.cmd check` 通过，包含 28 项单元/集成测试、5 项 Electron 测试、lint、格式、类型检查与生产构建。阶段状态显示调整后重新通过构建与 2 项项目界面测试。功能范围、演示步骤和限制见 [stage-2.md](stage-2.md)。以下 2026-11-04 记录为基础环境初始化时的历史结果。
+2026-11-05，第二阶段重做 Windows x64：37 项单元/集成测试、6 项 Electron 测试，以及 lint、格式、类型检查和生产构建通过。默认项目路径使用系统文档目录下的 `moondot`；测试通过 Electron 的系统目录配置重定向到临时文档目录，不创建真实用户项目。当前范围与验证边界见 [stage-2.md](stage-2.md)。以下记录为基础环境初始化时的历史结果。
 
 2026-11-04，Windows x64：
 

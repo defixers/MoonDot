@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import log from 'electron-log/main'
 import { sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -17,8 +17,11 @@ import {
 import { profileSchema } from '../shared/settings'
 import { systemHealthSchema } from '../shared/system'
 import { WORK_METHODS, workChannel } from '../shared/channels'
-import { workSchemas, type WorkMethod, type WorkInput } from '../shared/work'
+import { workSchemas, type WorkMethod, type WorkInput, type WorkOutputs } from '../shared/work'
 import { createWorkService } from './services/work'
+import { createFileService } from './services/files'
+import { inheritSettings } from './db/inherit-settings'
+import { defaultProjectDirectory } from './services/project-paths'
 
 const paths = applicationPaths(
   app.getPath('appData'),
@@ -39,6 +42,9 @@ const report = (error: unknown) => {
 let database: ReturnType<typeof openDatabase> | undefined
 let settings: ReturnType<typeof createSettingsService> | undefined
 let mainWindow: BrowserWindow | undefined
+let fileService: ReturnType<typeof createFileService> | undefined
+let cleanupTimer: ReturnType<typeof setInterval> | undefined
+let quitting = false
 const showWindow = () => {
   if (!settings) return
   if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createMainWindow(settings, report)
@@ -61,10 +67,49 @@ if (!app.requestSingleInstanceLock()) {
       database = openDatabase(paths.database)
       const migration = await migrateDatabase(database.sqlite, paths.migrationSnapshots)
       log.info('Database ready', { schemaVersion: migration.version })
+      inheritSettings(database.sqlite, paths.legacyDatabase)
       settings = createSettingsService(database)
       const service = settings
       const connection = database
-      const work = createWorkService(connection.sqlite, () => service.getProfile().displayName)
+      const projects = createWorkService(
+        connection.sqlite,
+        () => Date.now(),
+        (id) => fileService?.busy(id) ?? false,
+        () => defaultProjectDirectory(app.getPath('documents')),
+        (path) => shell.trashItem(path),
+      )
+      fileService = createFileService(
+        connection.sqlite,
+        projects.get,
+        {
+          chooseDirectory: async () => {
+            const selection = await dialog.showOpenDialog(mainWindow!, {
+              properties: ['openDirectory', 'createDirectory'],
+            })
+            return selection.canceled ? null : (selection.filePaths[0] ?? null)
+          },
+          chooseImports: async (folders) => {
+            const selection = await dialog.showOpenDialog(mainWindow!, {
+              properties: [folders ? 'openDirectory' : 'openFile', 'multiSelections'],
+            })
+            return selection.canceled ? [] : selection.filePaths
+          },
+          trash: (path) => shell.trashItem(path),
+          open: (path) => shell.openPath(path),
+          reveal: (path) => shell.showItemInFolder(path),
+        },
+        report,
+      )
+      const work: {
+        [K in WorkMethod]: (input: WorkInput<K>) => WorkOutputs[K] | Promise<WorkOutputs[K]>
+      } = { ...projects, ...fileService }
+      cleanupTimer = setInterval(() => {
+        try {
+          projects.cleanup()
+        } catch (error) {
+          report(error)
+        }
+      }, 60_000)
       const trusted = (event: Electron.IpcMainInvokeEvent) =>
         !!mainWindow &&
         !mainWindow.isDestroyed() &&
@@ -130,7 +175,14 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('will-quit', () => {
+    clearInterval(cleanupTimer)
     database?.sqlite.close()
     database = undefined
+  })
+  app.on('before-quit', (event) => {
+    if (quitting || !fileService) return
+    event.preventDefault()
+    quitting = true
+    void fileService.dispose().finally(() => app.quit())
   })
 }

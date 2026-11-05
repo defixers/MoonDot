@@ -60,7 +60,9 @@ test('设置通过主进程持久化，重启保留窗口状态并展示许可�
       )
       .toEqual(bounds)
     await application.close()
-    const savedDatabase = new Database(join(directory, 'data/moondot.db'), { readonly: true })
+    const savedDatabase = new Database(join(directory, 'data/moondot-remake.db'), {
+      readonly: true,
+    })
     try {
       const saved = savedDatabase
         .prepare("SELECT value FROM app_settings WHERE key = 'window'")

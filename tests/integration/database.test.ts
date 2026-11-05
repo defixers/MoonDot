@@ -9,7 +9,7 @@ import { foundationMigration } from '../../src/main/db/migrations/0001-foundatio
 import { createSettingsService } from '../../src/main/services/settings'
 
 const connections: Database.Database[] = []
-// Keep failure/rollback fixtures scoped to v1; work.test.ts exercises the real v1 -> v2 upgrade.
+// Keep failure/rollback fixtures scoped to the foundation schema; work.test.ts covers the isolated remake database.
 const migrations = [foundationMigration]
 const migrateDatabase = (
   sqlite: Database.Database,

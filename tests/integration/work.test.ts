@@ -1,262 +1,345 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import Database from 'better-sqlite3'
 import { openDatabase } from '../../src/main/db'
 import { migrateDatabase } from '../../src/main/db/migrator'
-import { foundationMigration } from '../../src/main/db/migrations/0001-foundation'
-import { createWorkService } from '../../src/main/services/work'
+import { inheritSettings } from '../../src/main/db/inherit-settings'
 import { createSettingsService } from '../../src/main/services/settings'
-import { workSchemas, type ProjectDraft, type TaskDraft } from '../../src/shared/work'
+import { createWorkService, RETENTION_MS } from '../../src/main/services/work'
+import { defaultProjectDirectory } from '../../src/main/services/project-paths'
+import {
+  emptyStages,
+  phases,
+  projectDraftSchema,
+  workSchemas,
+  type ProjectDraft,
+} from '../../src/shared/work'
 
-const cleanups: (() => void)[] = []
+const roots: string[] = [],
+  connections: Database.Database[] = []
 afterEach(() => {
-  vi.useRealTimers()
-  for (const cleanup of cleanups.splice(0)) cleanup()
+  for (const db of connections.splice(0)) if (db.open) db.close()
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
-async function fixture(upgrade = false) {
-  const root = mkdtempSync(join(tmpdir(), 'moondot-work-')),
-    filename = join(root, 'data.db'),
-    db = openDatabase(filename)
-  cleanups.push(() => {
-    if (db.sqlite.open) db.sqlite.close()
-    rmSync(root, { recursive: true, force: true })
+async function fixture() {
+  const root = mkdtempSync(join(tmpdir(), 'moondot-remake-'))
+  roots.push(root)
+  const database = openDatabase(join(root, 'new.db'))
+  connections.push(database.sqlite)
+  await migrateDatabase(database.sqlite, join(root, 'snapshots'))
+  let time = Date.parse('2026-11-05T12:00:00Z')
+  const service = createWorkService(database.sqlite, () => time)
+  const draft = (overrides: Partial<ProjectDraft> = {}): ProjectDraft => ({
+    name: '月光',
+    type: 'single',
+    description: '',
+    cover: '',
+    dueDate: '',
+    stages: emptyStages(),
+    parentDirectory: root,
+    ...overrides,
   })
-  if (upgrade) {
-    await migrateDatabase(db.sqlite, join(root, 'snapshots'), [foundationMigration])
-    createSettingsService(db).saveProfile({ displayName: '制作人' })
+  return {
+    root,
+    database,
+    service,
+    draft,
+    advance: (ms: number) => {
+      time += ms
+    },
   }
-  const migration = await migrateDatabase(db.sqlite, join(root, 'snapshots'))
-  const service = createWorkService(
-    db.sqlite,
-    () => createSettingsService(db).getProfile().displayName,
-  )
-  const project = (changes: Partial<ProjectDraft> = {}) =>
-    service.saveProject({
-      name: '月光计划',
-      artist: '林深',
-      type: 'single',
-      genre: '独立流行',
-      bpm: 100,
-      musicalKey: 'C',
-      dueDate: '',
-      participants: '乐手',
-      description: '首次制作',
-      tags: ['独立'],
-      color: '#2563eb',
-      cover: '',
-      status: 'active',
-      ...changes,
-    }).id
-  const task = (projectId: string, changes: Partial<TaskDraft> = {}) =>
-    service.saveTask({
-      projectId,
-      title: '录制主唱',
-      description: '确认歌词细节',
-      stageId: null,
-      parentId: null,
-      status: 'todo',
-      priority: 'medium',
-      dueDate: '',
-      assignee: '',
-      ...changes,
-    }).id
-  return { root, filename, db, service, project, task, migration }
 }
-it('upgrades v1 data without losing settings and persists project/search data on reopen', async () => {
-  const { db, filename, service, project, migration } = await fixture(true)
-  expect(migration.version).toBe(2)
-  expect(migration.snapshot).toBeTruthy()
-  expect(createSettingsService(db).getProfile().displayName).toBe('制作人')
-  const id = project({ initialTasks: true })
-  expect(service.project({ id }).tasks).toHaveLength(2)
-  db.sqlite.close()
-  const reopened = openDatabase(filename)
-  try {
-    const stored = createWorkService(reopened.sqlite, () => '')
-    expect(stored.project({ id }).project.name).toBe('月光计划')
-    expect(stored.search({ query: '月光', includeArchived: false })).toHaveLength(1)
-    expect(reopened.sqlite.pragma('foreign_key_check')).toEqual([])
-  } finally {
-    reopened.sqlite.close()
-  }
-})
-it('normalizes template weights and copies stages without changing existing projects', async () => {
-  const { service, project } = await fixture()
-  const { id } = service.saveTemplate({
-    name: '自定义',
-    stages: [
-      { name: '制作', weight: 3 },
-      { name: '交付', weight: 1 },
-    ],
+const list = { query: '', status: '' as const, trash: false, page: 1, pageSize: 100 }
+it('deletes a trashed project directory only after name confirmation and preserves neighboring files', async () => {
+  const { root, database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
+  writeFileSync(join(directory, 'music.wav'), 'music')
+  writeFileSync(join(root, 'keep.txt'), 'keep')
+  const destination = join(root, 'system-trash')
+  const trash = vi.fn(async (path: string) => {
+    renameSync(path, destination)
   })
-  const first = project({ templateId: id })
-  expect(service.project({ id: first }).stages.map((s) => s.weight)).toEqual([75, 25])
-  service.saveTemplate({ id, name: '重做流程', stages: [{ name: '新阶段', weight: 1 }] })
-  expect(service.project({ id: first }).stages.map((s) => s.name)).toEqual(['制作', '交付'])
-  expect(service.project({ id: project({ templateId: id }) }).stages.map((s) => s.name)).toEqual([
-    '新阶段',
-  ])
-  expect(() =>
-    service.saveTemplate({ name: '非法', stages: [{ name: '阶段', weight: 0 }] }),
-  ).toThrow()
-})
-it('computes weighted progress from root tasks and excludes canceled/deleted tasks', async () => {
-  const { service, project, task } = await fixture()
-  const template = service.saveTemplate({
-    name: '进度',
-    stages: [
-      { name: '录音', weight: 3 },
-      { name: '交付', weight: 1 },
-    ],
-  }).id
-  const id = project({ templateId: template }),
-    [record, delivery] = service.project({ id }).stages
-  service.stageState({ id: delivery!.id, status: 'done' })
-  const a = task(id, { stageId: record!.id, status: 'done' }),
-    b = task(id, { stageId: record!.id })
-  task(id, { parentId: a, stageId: record!.id })
-  task(id, { stageId: record!.id, status: 'canceled' })
-  expect(service.project({ id }).project.progress).toBe(63)
-  service.trashTask({ id: b })
-  expect(service.project({ id }).project.progress).toBe(100)
-  service.moveTask({ id: a, status: 'review', beforeId: null })
-  expect(service.project({ id }).project.progress).toBe(25)
-  expect(service.project({ id }).tasks.find((t) => t.id === a)?.completedAt).toBeNull()
-})
-it('enforces project ownership, parent constraints and archive read-only in the service', async () => {
-  const { service, project, task } = await fixture()
-  const a = project(),
-    b = project(),
-    stage = service.project({ id: b }).stages[0]!.id
-  expect(() => task(a, { stageId: stage })).toThrow('阶段不属于')
-  const parent = task(a),
-    child = task(a, { parentId: parent })
-  expect(() => task(b, { parentId: parent })).toThrow('同项目')
-  expect(() => task(a, { parentId: child })).toThrow('顶层')
-  service.projectState({ id: a, status: 'archived' })
-  expect(() => task(a)).toThrow('只读')
-  expect(() => service.moveTask({ id: parent, status: 'done', beforeId: null })).toThrow('只读')
-  expect(() => service.saveNote({ projectId: a, taskId: null, body: '修改' })).toThrow('只读')
-  expect(() =>
-    service.stageState({ id: service.project({ id: a }).stages[0]!.id, status: 'done' }),
-  ).toThrow('只读')
-  expect(() => service.trashProject({ id: a })).toThrow('只读')
-  service.projectState({ id: a, status: 'active' })
-  expect(() => task(a)).not.toThrow()
-})
-it('soft deletes a subtree, restores only the same batch, and permanently deletes only with exact confirmation', async () => {
-  const { service, project, task, db } = await fixture()
-  const id = project(),
-    parent = task(id),
-    child = task(id, { parentId: parent })
-  service.saveNote({ projectId: id, taskId: child, body: '子任务备注' })
-  service.trashTask({ id: parent })
-  expect(service.project({ id }).tasks).toHaveLength(0)
-  expect(() => service.restoreTask({ id: child })).toThrow('父任务')
-  service.restoreTask({ id: parent })
-  expect(service.project({ id }).tasks).toHaveLength(2)
+  const deletion = createWorkService(database.sqlite, undefined, undefined, undefined, trash)
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow('回收站')
   service.trashProject({ id })
-  expect(service.search({ query: '备注', includeArchived: true })).toHaveLength(0)
-  expect(() => service.project({ id })).toThrow()
+  await expect(deletion.deleteProjectFiles({ id, name: 'wrong' })).rejects.toThrow('完整项目名称')
+  expect(trash).not.toHaveBeenCalled()
+  await deletion.deleteProjectFiles({ id, name: '月光' })
+  expect(trash).toHaveBeenCalledExactlyOnceWith(directory)
+  expect(existsSync(directory)).toBe(false)
+  expect(readFileSync(join(destination, 'music.wav'), 'utf8')).toBe('music')
+  expect(readFileSync(join(root, 'keep.txt'), 'utf8')).toBe('keep')
+  expect(service.projects({ ...list, trash: true }).total).toBe(0)
+})
+it('does not delete records when the system reports success but the directory still exists', async () => {
+  const { database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
+  service.trashProject({ id })
+  const trash = vi.fn(async () => {})
+  const deletion = createWorkService(database.sqlite, undefined, undefined, undefined, trash)
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow(
+    '项目目录仍然存在',
+  )
+  expect(deletion.get(id, true).rootDirectory).toBe(directory)
+  expect(existsSync(directory)).toBe(true)
   service.restoreProject({ id })
-  expect(service.project({ id }).notes).toHaveLength(1)
-  expect(() => service.purgeProject({ id, name: '月光计划' })).toThrow()
+  expect(service.project({ id }).id).toBe(id)
+})
+it('retains records and files on system trash failure and permits retry', async () => {
+  const { root, database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
   service.trashProject({ id })
-  expect(() => service.purgeProject({ id, name: '错误' })).toThrow()
-  service.purgeProject({ id, name: '月光计划' })
-  expect(db.sqlite.prepare('SELECT count(*) AS n FROM tasks').get()).toEqual({ n: 0 })
-  expect(db.sqlite.prepare('SELECT count(*) AS n FROM search_index').get()).toEqual({ n: 0 })
-  expect(db.sqlite.pragma('foreign_key_check')).toEqual([])
+  const trash = vi
+    .fn(async (path: string) => {
+      renameSync(path, join(root, 'system-trash'))
+    })
+    .mockRejectedValueOnce(new Error('volume unavailable'))
+  const deletion = createWorkService(database.sqlite, undefined, undefined, undefined, trash)
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow(
+    '无法移入系统回收站',
+  )
+  expect(existsSync(directory)).toBe(true)
+  expect(deletion.get(id, true).id).toBe(id)
+  await deletion.deleteProjectFiles({ id, name: '月光' })
+  expect(existsSync(directory)).toBe(false)
 })
-it('searches Chinese short terms, FTS phrases, literal wildcards and excludes deleted/archived records', async () => {
-  const { service, project, task } = await fixture()
-  const id = project({ name: '月光制作计划', description: '收录 100% 的灵感' })
-  const tid = task(id, { title: '制作计划录音' })
-  const note = service.saveNote({ projectId: id, taskId: tid, body: '春天的声音与月光' }).id
-  expect(service.search({ query: '月光', includeArchived: false }).map((hit) => hit.kind)).toEqual([
-    'project',
-    'note',
+it('rejects missing, redirected and overlapping project roots before deleting files', async () => {
+  const { root, database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
+  service.trashProject({ id })
+  const trash = vi.fn(async () => {})
+  const deletion = createWorkService(database.sqlite, undefined, undefined, undefined, trash)
+  const moved = join(root, 'moved')
+  renameSync(directory, moved)
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow('目录不可用')
+  symlinkSync(moved, directory, 'junction')
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow('指向已改变')
+  // Remove only the junction created by this test, never its target.
+  unlinkSync(directory)
+  renameSync(moved, directory)
+  const second = service.saveProject(draft({ name: 'other' }))
+  database.sqlite
+    .prepare('UPDATE projects SET root_directory = ? WHERE id = ?')
+    .run(join(directory, phases[0].folder), second.id)
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow('占用')
+  expect(trash).not.toHaveBeenCalled()
+  expect(existsSync(directory)).toBe(true)
+})
+it('locks projects during deletion and keeps pending records across the seven-day cleanup boundary', async () => {
+  const { root, database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
+  service.trashProject({ id })
+  let time = Date.parse(service.get(id, true).deletedAt!) + RETENTION_MS - 1
+  let finish!: () => void
+  const trash = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const deletion = createWorkService(database.sqlite, () => time, undefined, undefined, trash)
+  const pending = deletion.deleteProjectFiles({ id, name: '月光' })
+  expect(() => deletion.restoreProject({ id })).toThrow('正在删除')
+  expect(() => deletion.purgeProject({ id, name: '月光' })).toThrow('正在删除')
+  await expect(deletion.deleteProjectFiles({ id, name: '月光' })).rejects.toThrow('正在删除')
+  time += 1
+  expect(deletion.cleanup()).toBe(0)
+  renameSync(directory, join(root, 'system-trash'))
+  finish()
+  await pending
+  expect(trash).toHaveBeenCalledTimes(1)
+  expect(deletion.projects({ ...list, trash: true }).total).toBe(0)
+})
+it('creates the default moondot folder under the supplied system Documents path and supports explicit overrides', async () => {
+  const { root, database, draft } = await fixture()
+  const documents = join(root, 'redirected-documents')
+  mkdirSync(documents)
+  const service = createWorkService(
+    database.sqlite,
+    () => Date.now(),
+    () => false,
+    () => defaultProjectDirectory(documents),
+  )
+  expect(service.defaultProjectDirectory().directory).toBe(join(documents, 'moondot'))
+  const first = service.saveProject(draft({ parentDirectory: undefined }))
+  expect(service.project(first).rootDirectory).toBe(join(documents, 'moondot', '月光'))
+  const second = service.saveProject(draft({ name: 'custom' }))
+  expect(service.project(second).rootDirectory).toBe(join(root, 'custom'))
+  const blocked = join(root, 'blocked-documents')
+  mkdirSync(blocked)
+  writeFileSync(join(blocked, 'moondot'), 'occupied')
+  expect(() => defaultProjectDirectory(blocked)).toThrow()
+  expect(readFileSync(join(blocked, 'moondot'), 'utf8')).toBe('occupied')
+})
+it('creates fixed folders with no personnel/dates and persists all edits without changing completion or disk name', async () => {
+  const { root, database, service, draft } = await fixture()
+  const { id } = service.saveProject(draft())
+  const project = service.project({ id })
+  expect(project.status).toBe('incomplete')
+  expect(readdirSync(project.rootDirectory)).toEqual(phases.map((phase) => phase.folder))
+  service.projectState({ id, status: 'completed' })
+  const stages = emptyStages()
+  stages[0]!.people['制作人'] = ['小月', '阿海']
+  stages[1]!.people['作曲'] = ['小月']
+  stages[4]!.dueDate = '2027-01-10'
+  service.saveProject(
+    draft({
+      id,
+      name: '新的项目名',
+      stages,
+      dueDate: '2027-01-20',
+      description: '温暖的城市声音',
+      type: 'album',
+    }),
+  )
+  expect(service.project({ id }).rootDirectory).toBe(project.rootDirectory)
+  database.sqlite.close()
+  const reopened = openDatabase(join(root, 'new.db'))
+  connections.push(reopened.sqlite)
+  const saved = createWorkService(reopened.sqlite).project({ id })
+  expect(saved).toMatchObject({
+    status: 'completed',
+    name: '新的项目名',
+    stages,
+    dueDate: '2027-01-20',
+    type: 'album',
+  })
+  expect(saved.rootDirectory).toBe(project.rootDirectory)
+  createWorkService(reopened.sqlite).projectState({ id, status: 'incomplete' })
+  expect(createWorkService(reopened.sqlite).project({ id }).status).toBe('incomplete')
+})
+it('copies only display name and window state once and never modifies the legacy business database', async () => {
+  const { root, database } = await fixture()
+  const legacyPath = join(root, 'legacy.db')
+  const legacy = new Database(legacyPath)
+  legacy.exec(
+    'CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE old_projects (name TEXT)',
+  )
+  legacy.prepare('INSERT INTO old_projects VALUES (?)').run('旧项目必须保留')
+  const add = legacy.prepare('INSERT INTO app_settings VALUES (?, ?)')
+  add.run('profile', JSON.stringify({ displayName: '本机音乐人' }))
+  add.run('window', JSON.stringify({ width: 1200, height: 800, maximized: false }))
+  add.run('work_preferences', JSON.stringify({ projectView: 'table' }))
+  legacy.close()
+  const before = readFileSync(legacyPath)
+  inheritSettings(database.sqlite, legacyPath)
+  expect(readFileSync(legacyPath)).toEqual(before)
+  const settings = createSettingsService(database)
+  expect(settings.getProfile().displayName).toBe('本机音乐人')
+  expect(settings.getWindow().width).toBe(1200)
+  expect(
+    database.sqlite.prepare("SELECT 1 FROM app_settings WHERE key = 'work_preferences'").get(),
+  ).toBeUndefined()
+  expect(database.sqlite.prepare('SELECT COUNT(*) AS n FROM projects').get()).toEqual({ n: 0 })
+  settings.saveProfile({ displayName: '新名字' })
+  inheritSettings(database.sqlite, legacyPath)
+  expect(settings.getProfile().displayName).toBe('新名字')
+})
+it('rejects missing locations, existing names and overlapping roots including trashed projects', async () => {
+  const { service, draft, root } = await fixture()
+  expect(() => service.saveProject(draft({ parentDirectory: undefined }))).toThrow()
+  mkdirSync(join(root, 'occupied'))
+  writeFileSync(join(root, 'occupied', 'keep.txt'), 'keep')
+  expect(() => service.saveProject(draft({ name: 'occupied' }))).toThrow()
+  const { id } = service.saveProject(draft())
+  const project = service.project({ id })
+  expect(() =>
+    service.saveProject(draft({ name: 'inside', parentDirectory: project.rootDirectory })),
+  ).toThrow()
+  const second = service.saveProject(draft({ name: '另一个项目' }))
+  expect(() =>
+    service.relocateProject({ id: second.id, directory: project.rootDirectory }),
+  ).toThrow()
+  service.trashProject({ id })
+  expect(() =>
+    service.saveProject(draft({ name: 'inside', parentDirectory: project.rootDirectory })),
+  ).toThrow()
+  expect(readFileSync(join(root, 'occupied', 'keep.txt'), 'utf8')).toBe('keep')
+})
+it('rolls back folders when database creation fails and leaves no project record', async () => {
+  const { service, database, draft, root } = await fixture()
+  database.sqlite.exec(
+    "CREATE TRIGGER fail_create BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'forced failure'); END",
+  )
+  expect(() => service.saveProject(draft())).toThrow('forced failure')
+  expect(existsSync(join(root, '月光'))).toBe(false)
+  expect(service.projects(list).total).toBe(0)
+})
+it('restores moved directories only after relinking and purges records precisely seven days after deletion', async () => {
+  const { root, service, draft, advance } = await fixture()
+  const { id } = service.saveProject(draft())
+  const original = service.project({ id }).rootDirectory
+  writeFileSync(join(original, phases[0].folder, 'keep.txt'), 'music')
+  service.trashProject({ id })
+  const relocated = join(root, 'moved')
+  renameSync(original, relocated)
+  expect(() => service.restoreProject({ id })).toThrow()
+  service.restoreProject({ id, directory: relocated })
+  expect(service.project({ id }).rootDirectory).toBe(relocated)
+  service.trashProject({ id })
+  advance(RETENTION_MS - 1)
+  expect(service.cleanup()).toBe(0)
+  expect(service.projects({ ...list, trash: true }).total).toBe(1)
+  advance(1)
+  expect(service.cleanup()).toBe(1)
+  expect(service.projects({ ...list, trash: true }).total).toBe(0)
+  expect(readFileSync(join(relocated, phases[0].folder, 'keep.txt'), 'utf8')).toBe('music')
+})
+it('startup cleanup and manual purge delete only records', async () => {
+  const { service, database, draft, advance } = await fixture()
+  const { id } = service.saveProject(draft())
+  const directory = service.project({ id }).rootDirectory
+  expect(() => service.purgeProject({ id, name: '月光' })).toThrow()
+  service.trashProject({ id })
+  expect(() => service.purgeProject({ id, name: 'wrong' })).toThrow()
+  service.purgeProject({ id, name: '月光' })
+  expect(existsSync(directory)).toBe(true)
+  const second = service.saveProject(draft({ name: '过期' }))
+  service.trashProject({ id: second.id })
+  advance(RETENTION_MS)
+  createWorkService(database.sqlite, () => Date.parse('2026-11-05T12:00:00Z') + RETENTION_MS)
+  expect(service.projects({ ...list, trash: true }).total).toBe(0)
+})
+it('searches only live project names, notes and people, including literal wildcard characters', async () => {
+  const { service, draft } = await fixture()
+  const stages = emptyStages()
+  stages[1]!.people['编曲'] = ['小月']
+  const { id } = service.saveProject(draft({ stages, description: '温暖 100%_声音' }))
+  for (const query of ['月', '小月', '温暖', '%_'])
+    expect(service.search({ query }).map((hit) => hit.id)).toEqual([id])
+  service.trashProject({ id })
+  expect(service.search({ query: '月' })).toEqual([])
+})
+it('validates fixed stages, personnel, dates and obsolete fields at IPC boundary', async () => {
+  const { draft } = await fixture()
+  expect(projectDraftSchema.safeParse(draft()).success).toBe(true)
+  for (const value of [
+    draft({ stages: emptyStages().slice(1) }),
+    draft({ dueDate: '2026-02-30' }),
+    { ...draft(), artist: 'removed' },
+    { ...draft(), type: 'other' },
   ])
-  expect(service.search({ query: '制作计划', includeArchived: false })[0]?.id).toBe(tid)
-  expect(service.search({ query: '%', includeArchived: false }).map((hit) => hit.id)).toEqual([id])
-  expect(() => service.search({ query: '" OR *', includeArchived: false })).not.toThrow()
-  service.saveNote({ id: note, projectId: id, taskId: tid, body: '秋天的回声' })
-  expect(service.search({ query: '春天的', includeArchived: false })).toHaveLength(0)
-  expect(service.search({ query: '秋天的', includeArchived: false })).toHaveLength(1)
-  service.projectState({ id, status: 'archived' })
-  expect(service.search({ query: '月光', includeArchived: false })).toHaveLength(0)
-  expect(service.search({ query: '月光', includeArchived: true })).toHaveLength(1)
-})
-it('moves one task atomically and offers bounded undo that refuses stale edits', async () => {
-  const { service, project, task, db } = await fixture()
-  const id = project(),
-    a = task(id, { title: '甲' }),
-    b = task(id, { title: '乙' }),
-    c = task(id, { title: '丙' })
-  const initial = service.project({ id }).tasks.map((t) => ({ id: t.id, rank: t.rank }))
-  const moved = service.moveTask({ id: c, status: 'todo', beforeId: a })
-  expect(service.project({ id }).tasks.map((t) => t.id)).toEqual([c, a, b])
-  expect(service.project({ id }).tasks.find((t) => t.id === a)?.rank).toBe(initial[0]?.rank)
-  service.undo({ token: moved.undoToken! })
-  expect(service.project({ id }).tasks.map((t) => t.id)).toEqual([a, b, c])
-  const deletion = service.trashTask({ id: a })
-  task(id)
-  expect(() => service.undo({ token: deletion.undoToken! })).toThrow('数据已变化')
-  const expired = service.trashTask({ id: b })
-  vi.useFakeTimers()
-  vi.setSystemTime(Date.now() + 6000)
-  expect(() => service.undo({ token: expired.undoToken! })).toThrow('过期')
-  expect(
-    db.sqlite.prepare('SELECT count(*) AS n FROM activity_logs WHERE project_id=?').get(id),
-  ).toBeTruthy()
-})
-it('validates IPC dates, status enums and default-template preferences', async () => {
-  const { service } = await fixture()
-  const id = service.templates(undefined)[0]!.id
-  service.savePreferences({ projectView: 'table', taskView: 'list', defaultTemplateId: id })
-  service.deleteTemplate({ id })
-  expect(service.preferences(undefined).defaultTemplateId).toBeNull()
-  expect(workSchemas.projectState.safeParse({ id, status: '已归档' }).success).toBe(false)
-  expect(
-    workSchemas.tasks.safeParse({
-      projectId: null,
-      status: '',
-      priority: '',
-      stageId: null,
-      dueBefore: '2026-02-30',
-      query: '',
-      trash: false,
-    }).success,
-  ).toBe(false)
-})
-
-it('restores deleted tasks with distinct ranks after their previous positions were reused', async () => {
-  const { service, project, task } = await fixture()
-  const id = project(),
-    first = task(id),
-    second = task(id)
-  service.trashTask({ id: second })
-  const replacement = task(id)
-  service.restoreTask({ id: second })
-  const restored = service.project({ id }).tasks
-  expect(restored.map((item) => item.id)).toEqual([first, replacement, second])
-  expect(new Set(restored.map((item) => item.rank)).size).toBe(3)
-  service.moveTask({ id: second, status: 'todo', beforeId: replacement })
-  expect(service.project({ id }).tasks.map((item) => item.id)).toEqual([first, second, replacement])
-})
-
-it('does not restore a previously deleted child when two deletion batches share a clock tick', async () => {
-  const { service, project, task } = await fixture()
-  const id = project(),
-    parent = task(id),
-    child = task(id, { parentId: parent })
-  vi.useFakeTimers()
-  vi.setSystemTime(new Date('2026-11-05T00:00:00Z'))
-  service.trashTask({ id: child })
-  service.trashTask({ id: parent })
-  service.restoreTask({ id: parent })
-  expect(service.project({ id }).tasks.map((item) => item.id)).toEqual([parent])
-  service.restoreTask({ id: child })
-  expect(service.project({ id }).tasks).toHaveLength(2)
+    expect(projectDraftSchema.safeParse(value).success).toBe(false)
+  const stages = emptyStages()
+  stages[0]!.people['作曲'] = ['不属于这个阶段']
+  expect(projectDraftSchema.safeParse(draft({ stages })).success).toBe(false)
+  expect(workSchemas.search.safeParse({ query: 'x', includeArchived: true }).success).toBe(false)
 })

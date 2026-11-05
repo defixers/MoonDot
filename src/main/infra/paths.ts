@@ -12,7 +12,8 @@ export function applicationPaths(
     : resolve(override ?? join(projectRoot, '.local/userData'))
   return {
     userData,
-    database: join(userData, 'data/moondot.db'),
+    database: join(userData, 'data/moondot-remake.db'),
+    legacyDatabase: join(userData, 'data/moondot.db'),
     migrationSnapshots: join(userData, 'snapshots/migrations'),
     logs: join(userData, 'logs'),
   }

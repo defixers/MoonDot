@@ -1,388 +1,262 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NModal } from 'naive-ui'
-import { projectStatuses, type Project } from '../../shared/work'
-import { result, work, useActions } from '../work'
+import { projectTypes, type Project } from '../../shared/work'
+import { displayTime, listQuery, result, useActions, work } from '../work'
 import ProjectEditor from '../components/ProjectEditor.vue'
-const router = useRouter(),
-  projects = ref<Project[]>([]),
+import ProjectCard from '../components/ProjectCard.vue'
+const route = useRoute(),
+  router = useRouter()
+const query = ref(listQuery()),
+  items = ref<Project[]>([]),
   total = ref(0),
-  loading = ref(false),
-  editor = ref(false),
-  view = ref<'cards' | 'table'>('cards')
-const filter = ref({
-  query: '',
-  status: '' as '' | Project['status'],
-  tag: '',
-  stage: '',
-  dueBefore: '',
-  trash: false,
-  sort: 'updated' as 'updated' | 'due' | 'progress',
-  page: 1,
-  pageSize: 24,
-})
+  editor = ref(false)
+const pending = ref<Project>(),
+  deleteFiles = ref(false),
+  confirmName = ref(''),
+  recovery = ref<Project>()
+const { error, busy, run } = useActions(load)
 let sequence = 0
-const { error, busy, undoToken, run, reverse } = useActions(load)
+let recycleTimer: ReturnType<typeof setInterval>
 async function load() {
-  const current = ++sequence
-  loading.value = true
+  const ticket = ++sequence
   try {
-    const data = await result(work().projects({ ...filter.value }))
-    if (current === sequence) {
-      projects.value = data.items
-      total.value = data.total
+    const response = await result(
+      work().projects({ ...query.value, trash: route.path === '/trash' }),
+    )
+    if (ticket === sequence) {
+      const lastPage = Math.max(1, Math.ceil(response.total / query.value.pageSize))
+      if (query.value.page > lastPage) {
+        query.value.page = lastPage
+        return
+      }
+      items.value = response.items
+      total.value = response.total
     }
-  } catch (e) {
-    if (current === sequence) error.value = String(e)
-  } finally {
-    if (current === sequence) loading.value = false
+  } catch (cause) {
+    if (ticket === sequence) error.value = (cause as Error).message
   }
 }
-let timer: ReturnType<typeof setTimeout> | undefined
-onUnmounted(() => {
-  clearTimeout(timer)
-  sequence++
-})
 watch(
-  () => JSON.stringify({ ...filter.value, page: 0 }),
+  () => route.path,
   () => {
-    filter.value.page = 1
-    clearTimeout(timer)
-    timer = setTimeout(load, 200)
+    query.value = listQuery()
+    error.value = ''
+    recovery.value = undefined
+    pending.value = undefined
+    void load()
   },
 )
-watch(() => filter.value.page, load)
-onMounted(async () => {
-  await load()
-  try {
-    view.value = (await result(work().preferences(undefined))).projectView
-  } catch (e) {
-    error.value = String(e)
-  }
+watch(
+  query,
+  () => {
+    void load()
+  },
+  { deep: true },
+)
+onMounted(() => {
+  void load()
+  recycleTimer = setInterval(() => {
+    if (route.path === '/trash' && !document.hidden && !busy.value) void load()
+  }, 60_000)
 })
-async function changeView() {
+onUnmounted(() => {
+  sequence++
+  clearInterval(recycleTimer)
+})
+function filter() {
+  query.value.page = 1
+}
+async function restore(project: Project, relocate = false) {
+  recovery.value = undefined
   await run(async () => {
-    const prefs = await result(work().preferences(undefined))
-    await result(work().savePreferences({ ...prefs, projectView: view.value }))
+    let directory: string | undefined
+    if (relocate) {
+      const chosen = await result(work().chooseDirectory(undefined))
+      if (!chosen) return
+      directory = chosen
+    }
+    try {
+      await result(work().restoreProject({ id: project.id, directory }))
+    } catch (cause) {
+      recovery.value = project
+      throw cause
+    }
   })
 }
-const purge = ref<Project>(),
-  confirmName = ref('')
-async function removeForever() {
-  if (!purge.value) return
-  await run(async () => {
-    const response = await result(
-      work().purgeProject({ id: purge.value!.id, name: confirmName.value }),
-    )
-    purge.value = undefined
-    return response
+function purge() {
+  if (!pending.value || busy.value) return
+  const input = { id: pending.value.id, name: confirmName.value }
+  const removeFiles = deleteFiles.value
+  void run(async () => {
+    await result(removeFiles ? work().deleteProjectFiles(input) : work().purgeProject(input))
+    pending.value = undefined
   })
+}
+function confirmDeletion(project: Project, files: boolean) {
+  pending.value = project
+  deleteFiles.value = files
+  confirmName.value = ''
+  error.value = ''
 }
 </script>
 <template>
   <div class="heading-row">
     <div class="page-heading">
-      <p class="eyebrow">从灵感到交付</p>
-      <h1>{{ filter.trash ? '项目回收站' : '项目' }}</h1>
-      <p>安排制作阶段，让每一步都有清晰进展。</p>
+      <p class="eyebrow">让每一次创作有处安放</p>
+      <h1>{{ route.path === '/trash' ? '项目回收站' : '项目' }}</h1>
+      <p v-if="route.path === '/trash'">
+        项目记录保留七天，到期仅清理记录。也可手动将本地项目文件移入系统回收站。
+      </p>
+      <p v-else>从灵感到发行，在自己的节奏里完成。</p>
     </div>
     <button
+      v-if="route.path !== '/trash'"
       class="primary"
       @click="editor = true"
     >
-      新建项目
+      创建项目
     </button>
   </div>
-  <div class="toolbar">
+  <form
+    class="toolbar"
+    @submit.prevent="
+      () => {
+        filter()
+        load()
+      }
+    "
+  >
     <label>
       搜索项目
       <input
-        v-model="filter.query"
-        placeholder="项目名、艺人、编号"
+        v-model="query.query"
+        type="search"
+        maxlength="120"
+        placeholder="名称、备注或人员"
+        @input="filter"
       />
     </label>
     <label>
       项目状态
-      <select v-model="filter.status">
-        <option value="">全部状态</option>
-        <option
-          v-for="(label, key) in projectStatuses"
-          :key="key"
-          :value="key"
-        >
-          {{ label }}
-        </option>
-      </select>
-    </label>
-    <label>
-      标签
-      <input
-        v-model="filter.tag"
-        placeholder="精确标签"
-      />
-    </label>
-    <label>
-      当前阶段
-      <input
-        v-model="filter.stage"
-        placeholder="例如：混音"
-      />
-    </label>
-    <label>
-      截止日期之前
-      <input
-        v-model="filter.dueBefore"
-        type="date"
-      />
-    </label>
-    <label>
-      项目排序
-      <select v-model="filter.sort">
-        <option value="updated">最近更新</option>
-        <option value="due">截止日</option>
-        <option value="progress">进度</option>
-      </select>
-    </label>
-    <label>
-      项目视图
       <select
-        v-model="view"
-        aria-label="项目视图"
-        @change="changeView"
+        v-model="query.status"
+        @change="filter"
       >
-        <option value="cards">卡片</option>
-        <option value="table">表格</option>
+        <option value="">全部状态</option>
+        <option value="incomplete">未完成</option>
+        <option value="completed">已完成</option>
       </select>
     </label>
     <button
-      :aria-pressed="filter.trash"
-      @click="filter.trash = !filter.trash"
+      type="button"
+      @click="load"
     >
-      {{ filter.trash ? '返回项目' : '回收站' }}
+      刷新
     </button>
-  </div>
+    <span class="muted">{{ total }} 个项目</span>
+  </form>
   <p
     v-if="error"
-    role="alert"
     class="error-text"
+    role="alert"
   >
     {{ error }}
-    <button @click="load">重试</button>
   </p>
   <div
-    v-if="undoToken"
-    role="status"
-    class="undo-bar"
+    v-if="recovery"
+    class="surface"
   >
-    操作已保存
+    <p>
+      恢复“{{ recovery.name }}”需要重新关联可用的项目目录。请选择包含五个阶段文件夹的原项目目录。
+    </p>
     <button
       :disabled="busy"
-      @click="reverse"
+      @click="restore(recovery!, true)"
     >
-      撤销（5 秒）
+      重新定位并恢复
     </button>
   </div>
-  <p
-    v-if="filter.trash"
-    class="muted"
-  >
-    软删除数据至少保留 30 天，不自动彻底清除。彻底删除需输入项目名，且无法撤销。
-  </p>
-  <p
-    v-if="loading"
-    role="status"
-  >
-    正在读取项目…
-  </p>
   <div
-    v-if="!projects.length && !loading"
+    v-if="!items.length"
     class="empty-state"
   >
-    <h2>{{ filter.trash ? '回收站为空' : '暂时没有符合条件的项目' }}</h2>
-    <p>调整筛选，或创建一个新的音乐项目。</p>
+    {{
+      route.path === '/trash'
+        ? '回收站为空'
+        : query.query || query.status
+          ? '没有匹配的项目'
+          : '还没有项目，创建你的第一个音乐项目。'
+    }}
   </div>
   <div
-    v-else-if="view === 'table'"
-    class="project-table-wrap"
-    tabindex="0"
-    role="region"
-    aria-label="项目表格，可横向滚动"
+    v-else-if="route.path !== '/trash'"
+    class="project-grid"
   >
-    <table class="project-table">
-      <thead>
-        <tr>
-          <th scope="col">项目 / 艺人</th>
-          <th scope="col">状态</th>
-          <th scope="col">当前阶段</th>
-          <th scope="col">进度</th>
-          <th scope="col">截止日</th>
-          <th scope="col">标签</th>
-          <th
-            v-if="filter.trash"
-            scope="col"
-          >
-            操作
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="project in projects"
-          :key="project.id"
-          :data-testid="`project-${project.id}`"
-        >
-          <td>
-            <RouterLink
-              v-if="!filter.trash"
-              :to="`/projects/${project.id}/overview`"
-            >
-              {{ project.name }}
-            </RouterLink>
-            <span v-else>{{ project.name }}</span>
-            <small class="muted">{{ project.artist || '未填写艺人' }} · {{ project.code }}</small>
-          </td>
-          <td>{{ projectStatuses[project.status] }}</td>
-          <td>{{ project.currentStage }}</td>
-          <td>{{ project.progress }}%</td>
-          <td>
-            {{ project.dueDate || '未设置' }}
-            <span
-              v-if="project.health !== 'normal'"
-              class="risk-tag"
-            >
-              {{ project.health === 'overdue' ? '已逾期' : '有风险' }}
-            </span>
-          </td>
-          <td>
-            <div class="tag-row">
-              <span
-                v-for="tag in project.tags"
-                :key="tag"
-                class="tag"
-              >
-                {{ tag }}
-              </span>
-            </div>
-          </td>
-          <td v-if="filter.trash">
-            <button
-              :disabled="busy"
-              @click="run(() => result(work().restoreProject({ id: project.id })))"
-            >
-              恢复项目
-            </button>
-            <button
-              class="danger"
-              @click="
-                () => {
-                  purge = project
-                  confirmName = ''
-                }
-              "
-            >
-              彻底删除
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <ProjectCard
+      v-for="project in items"
+      :key="project.id"
+      :project="project"
+    />
   </div>
   <div
     v-else
-    class="project-grid"
+    class="trash-list"
   >
     <article
-      v-for="project in projects"
+      v-for="project in items"
       :key="project.id"
-      class="project-card"
-      :data-testid="`project-${project.id}`"
+      class="surface"
     >
-      <div
-        class="project-cover"
-        :style="{ backgroundColor: project.color }"
-      >
-        <img
-          v-if="project.cover"
-          :src="project.cover"
-          alt=""
-        />
-        <span v-else>{{ project.name.slice(0, 1) }}</span>
-      </div>
-      <div class="project-body">
-        <span class="eyebrow">{{ project.code }} · {{ projectStatuses[project.status] }}</span>
-        <h2>
-          <RouterLink
-            v-if="!filter.trash"
-            :to="`/projects/${project.id}/overview`"
-          >
-            {{ project.name }}
-          </RouterLink>
-          <span v-else>{{ project.name }}</span>
-        </h2>
-        <p>{{ project.artist || '未填写艺人' }} · {{ project.currentStage }}</p>
-        <div class="progress-row">
-          <progress
-            :value="project.progress"
-            max="100"
-          />
-          <span>{{ project.progress }}%</span>
-        </div>
-        <p class="muted">
-          截止 {{ project.dueDate || '未设置' }}
-          <span
-            v-if="project.health !== 'normal'"
-            class="risk-tag"
-          >
-            {{ project.health === 'overdue' ? '已逾期' : '有风险' }}
-          </span>
-        </p>
-        <div class="tag-row">
-          <span
-            v-for="tag in project.tags"
-            :key="tag"
-            class="tag"
-          >
-            {{ tag }}
-          </span>
-        </div>
-        <div
-          v-if="filter.trash"
-          class="form-actions"
+      <h2>{{ project.name }}</h2>
+      <p class="muted">
+        {{ projectTypes[project.type] }} · 删除于 {{ displayTime(project.deletedAt!) }}
+      </p>
+      <p>
+        记录清理时间：{{
+          displayTime(new Date(Date.parse(project.deletedAt!) + 7 * 86400000).toISOString())
+        }}
+      </p>
+      <p class="project-directory">{{ project.rootDirectory }}</p>
+      <div class="inline-actions">
+        <button
+          :disabled="busy"
+          @click="restore(project)"
         >
-          <button
-            :disabled="busy"
-            @click="run(() => result(work().restoreProject({ id: project.id })))"
-          >
-            恢复项目
-          </button>
-          <button
-            class="danger"
-            @click="
-              () => {
-                purge = project
-                confirmName = ''
-              }
-            "
-          >
-            彻底删除
-          </button>
-        </div>
+          恢复项目
+        </button>
+        <button
+          class="danger"
+          :disabled="busy"
+          @click="confirmDeletion(project, false)"
+        >
+          永久删除记录
+        </button>
+        <button
+          class="danger"
+          :disabled="busy"
+          @click="confirmDeletion(project, true)"
+        >
+          删除本地项目文件
+        </button>
       </div>
     </article>
   </div>
-  <div class="pagination">
-    <span>共 {{ total }} 个项目</span>
+  <div
+    v-if="total > query.pageSize"
+    class="pagination"
+  >
     <button
-      :disabled="filter.page === 1"
-      @click="filter.page--"
+      :disabled="query.page === 1"
+      @click="query.page--"
     >
       上一页
     </button>
-    <span>{{ filter.page }}</span>
+    <span>{{ query.page }} / {{ Math.ceil(total / query.pageSize) }}</span>
     <button
-      :disabled="filter.page * filter.pageSize >= total"
-      @click="filter.page++"
+      :disabled="query.page * query.pageSize >= total"
+      @click="query.page++"
     >
       下一页
     </button>
@@ -393,31 +267,65 @@ async function removeForever() {
     @saved="
       (id) => {
         editor = false
-        router.push(`/projects/${id}/overview`)
+        router.push('/projects/' + id)
       }
     "
   />
   <NModal
-    :show="!!purge"
+    :show="!!pending"
     preset="card"
-    title="彻底删除项目"
-    class="editor-modal"
-    @close="purge = undefined"
+    :title="deleteFiles ? '删除本地项目文件' : '永久删除项目记录'"
+    class="search-modal"
+    :mask-closable="false"
+    :closable="!busy"
+    :close-on-esc="!busy"
+    @update:show="!busy && (pending = undefined)"
   >
-    <p>将永久删除项目、任务、备注与活动。输入「{{ purge?.name }}」确认。</p>
+    <template v-if="deleteFiles">
+      <p>
+        将以下项目目录及其中所有文件移入系统回收站，同时永久删除软件内的项目记录。文件可从系统回收站找回，软件内记录无法恢复。
+      </p>
+      <p class="project-directory">{{ pending?.rootDirectory }}</p>
+      <p>如果系统回收站不可用，将保留记录并提示失败。</p>
+    </template>
+    <p v-else>此操作无法恢复，磁盘上的项目文件会保留。</p>
+    <p>请输入项目名称“{{ pending?.name }}”确认。</p>
     <label>
-      确认项目名
-      <input v-model="confirmName" />
+      确认项目名称
+      <input
+        v-model="confirmName"
+        :disabled="busy"
+        maxlength="120"
+      />
     </label>
+    <p
+      v-if="error"
+      class="error-text"
+      role="alert"
+    >
+      {{ error }}
+    </p>
     <div class="form-actions">
-      <button @click="purge = undefined">取消</button>
+      <button
+        :disabled="busy"
+        @click="pending = undefined"
+      >
+        取消
+      </button>
       <button
         class="danger"
-        :disabled="busy || confirmName !== purge?.name"
-        @click="removeForever"
+        :disabled="busy || confirmName !== pending?.name"
+        @click="purge"
       >
-        确认彻底删除
+        {{ busy ? '正在处理…' : deleteFiles ? '确认移入系统回收站并删除记录' : '确认永久删除记录' }}
       </button>
     </div>
   </NModal>
 </template>
+<style scoped>
+.project-directory {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+</style>
