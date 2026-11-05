@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+.cache
+.tools
+.local
+out
+dist
+release
+coverage
+test-results
+playwright-report
+pnpm-lock.yaml
+README.md
+THIRD_PARTY_NOTICES.md
+docs/音乐工程项目管理系统-开发方案.md
+docs/ui
+resources/ffmpeg

@@ -1,0 +1,31 @@
+appId: com.moondot.app
+productName: 月句 MoonDot
+copyright: Copyright © 2026 归尘回梦
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
+  - resources/licenses/**/*
+asar: true
+asarUnpack:
+  - '**/*.node'
+npmRebuild: true
+publish: null
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  identity: null
+  category: public.app-category.music

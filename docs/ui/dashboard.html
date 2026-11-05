@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>月句 MoonDot — 工作台视觉预览</title>
+<style>
+  :root {
+    --bg: #F4F5F7;
+    --surface: #FFFFFF;
+    --sidebar: #0E1116;
+    --sidebar-raised: #151A21;
+    --border: #E5E8EE;
+    --text: #14171F;
+    --text-2: #606977;
+    --text-3: #929BA9;
+    --accent: #2563EB;
+    --accent-soft: #EFF4FF;
+    --green: #047857;
+    --green-soft: #ECFDF5;
+    --amber: #B45309;
+    --amber-soft: #FFF7ED;
+    --red: #B42318;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1600px; height: 1000px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-size: 14px; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+    user-select: none;
+  }
+  button { font-family: inherit; }
+  .icon {
+    width: 18px; height: 18px; flex: none; display: block;
+    fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .mono { font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .app { height: 100%; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+
+  /* Sidebar */
+  .sidebar { background: var(--sidebar); color: #C9CFD8; padding: 20px 14px 18px; display: flex; flex-direction: column; min-height: 0; }
+  .brand { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 6px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 600; line-height: 1; box-shadow: 0 2px 8px rgba(37,99,235,.25); }
+  .brand-name { color: #fff; font-size: 17px; font-weight: 560; letter-spacing: 3px; line-height: 1.1; }
+  .brand-sub { color: #6F7988; font-size: 7px; letter-spacing: 1.7px; margin-top: 4px; }
+  .workspace { margin-top: 22px; height: 48px; border: 1px solid #242B36; background: var(--sidebar-raised); border-radius: 9px; display: flex; align-items: center; gap: 9px; padding: 0 10px; }
+  .ws-avatar { width: 26px; height: 26px; border-radius: 7px; background: #202836; color: #DCE4F0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .ws-name { color: #E8ECF2; font-size: 12px; font-weight: 550; line-height: 1.2; }
+  .ws-role { color: #798393; font-size: 9.5px; margin-top: 3px; }
+  .workspace .icon { margin-left: auto; width: 14px; height: 14px; color: #687283; }
+  .nav-label { color: #666F7E; font-size: 9px; letter-spacing: 1.3px; font-weight: 600; padding: 0 10px; margin: 24px 0 8px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { height: 38px; border-radius: 8px; display: flex; align-items: center; gap: 10px; padding: 0 10px; color: #9CA5B3; font-size: 13px; position: relative; }
+  .nav-item .icon { width: 17px; height: 17px; color: #7F8998; }
+  .nav-item.active { background: #1A2029; color: #fff; font-weight: 550; }
+  .nav-item.active .icon { color: #8FB2FF; }
+  .nav-item.active::before { content: ""; position: absolute; left: 0; top: 11px; width: 2.5px; height: 16px; border-radius: 2px; background: var(--accent); }
+  .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #232B37; color: #B6C0CE; font-size: 10px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .nav-item.active .nav-badge { background: #26364F; color: #BBD1FF; }
+  .sidebar-divider { height: 1px; background: #1D242E; margin: 18px 10px 0; }
+  .recent-label { color: #666F7E; font-size: 9px; letter-spacing: 1.3px; font-weight: 600; padding: 0 10px; margin: 18px 0 7px; }
+  .recent-item { height: 31px; border-radius: 7px; padding: 0 10px; display: flex; align-items: center; gap: 9px; color: #929CAB; font-size: 12px; }
+  .recent-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: #475569; }
+  .recent-dot.blue { background: #3B82F6; }
+  .recent-dot.steel { background: #94A3B8; }
+  .recent-dot.light { background: #CBD5E1; }
+  .recent-item .r-stage { margin-left: auto; color: #5F6A79; font-size: 9px; }
+  .backup-label { color: #666F7E; font-size: 9px; letter-spacing: 1.3px; font-weight: 600; padding: 0 10px; margin: 18px 0 7px; }
+  .backup-row { display: flex; align-items: center; gap: 7px; padding: 0 10px; color: #8C96A6; font-size: 10px; }
+  .backup-check { width: 16px; height: 16px; border-radius: 50%; background: #123524; color: #4ADE80; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
+  .backup-warn { display: flex; align-items: center; gap: 7px; padding: 7px 10px 0; color: #C9923E; font-size: 9.5px; }
+  .backup-warn-icon { width: 16px; height: 16px; border-radius: 50%; background: #2A2116; color: #FBBF24; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
+  .sidebar-spacer { flex: 1; min-height: 14px; }
+  .storage-card { background: var(--sidebar-raised); border: 1px solid #232A35; border-radius: 10px; padding: 12px 12px 11px; }
+  .storage-head { display: flex; align-items: center; justify-content: space-between; color: #8C96A6; font-size: 10px; }
+  .storage-head .icon { width: 13px; height: 13px; color: #697586; }
+  .storage-value { color: #E7EBF2; font-size: 12.5px; font-weight: 550; margin-top: 7px; }
+  .storage-value span { color: #697586; font-size: 10px; font-weight: 400; }
+  .storage-bar { height: 4px; background: #252D39; border-radius: 999px; margin-top: 9px; overflow: hidden; }
+  .storage-bar i { display: block; height: 100%; width: 61%; background: var(--accent); border-radius: 999px; }
+  .storage-foot { color: #626D7D; font-size: 9px; margin-top: 7px; display: flex; justify-content: space-between; }
+  .account { display: flex; align-items: center; gap: 9px; padding: 14px 7px 0; }
+  .account-avatar { width: 30px; height: 30px; border-radius: 50%; background: #1E293B; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; border: 1px solid #334155; }
+  .account-name { color: #DDE3EB; font-size: 11.5px; font-weight: 550; }
+  .account-role { color: #687283; font-size: 9px; margin-top: 3px; }
+  .account .icon { margin-left: auto; width: 15px; height: 15px; color: #667080; }
+
+  /* Main */
+  .main { min-width: 0; display: flex; flex-direction: column; height: 100%; }
+  .topbar { height: 64px; flex: none; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 30px; gap: 18px; }
+  .crumb { color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 7px; width: 180px; flex: none; }
+  .crumb b { color: var(--text); font-weight: 550; }
+  .crumb-slash { color: #C3C9D2; }
+  .searchbox { width: 388px; height: 36px; border: 1px solid var(--border); background: #FAFBFC; border-radius: 8px; display: flex; align-items: center; gap: 9px; padding: 0 10px; color: #98A1AE; font-size: 12px; }
+  .searchbox .icon { width: 15px; height: 15px; color: #7C8797; }
+  .local-status { height: 28px; padding: 0 9px; border-radius: 999px; background: #F0FDF4; border: 1px solid #D1FADF; color: #067647; font-size: 10px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .local-dot { width: 5px; height: 5px; border-radius: 50%; background: #12B76A; box-shadow: 0 0 0 3px rgba(18,183,106,.12); }
+  .kbd { margin-left: auto; height: 20px; padding: 0 6px; border: 1px solid #E1E5EB; border-bottom-color: #D4DAE2; border-radius: 5px; background: #fff; color: #8A94A3; font-size: 9.5px; display: flex; align-items: center; }
+  .top-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .primary-btn { height: 34px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 550; padding: 0 13px; display: flex; align-items: center; gap: 7px; box-shadow: 0 1px 2px rgba(37,99,235,.18); }
+  .primary-btn .icon { width: 14px; height: 14px; }
+  .icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: center; color: #667080; position: relative; }
+  .icon-btn .icon { width: 17px; height: 17px; }
+  .dot-badge { position: absolute; right: 8px; top: 7px; width: 5.5px; height: 5.5px; border-radius: 50%; background: var(--accent); border: 1.5px solid #fff; }
+  .top-avatar { width: 32px; height: 32px; border-radius: 50%; background: #E8EDF5; color: #334155; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; border: 1px solid #D8DFE8; }
+
+  .content { flex: 1; min-height: 0; padding: 24px 30px 26px; display: flex; flex-direction: column; gap: 18px; }
+  .page-head { height: 58px; flex: none; display: flex; align-items: flex-start; }
+  .page-head h1 { margin: 0; font-size: 26px; line-height: 1.15; letter-spacing: -.4px; font-weight: 600; }
+  .page-sub { margin-top: 8px; color: var(--text-2); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .page-sub .sep { width: 3px; height: 3px; border-radius: 50%; background: #C4CAD3; }
+  .page-sub .warn { color: var(--amber); }
+  .head-right { margin-left: auto; display: flex; align-items: center; gap: 9px; padding-top: 1px; }
+  .date-chip { height: 33px; border: 1px solid var(--border); background: #fff; border-radius: 8px; display: flex; align-items: center; gap: 7px; padding: 0 11px; color: #4B5563; font-size: 10.5px; }
+  .date-chip .icon { width: 14px; height: 14px; color: #7C8797; }
+  .ghost-btn { height: 33px; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 0 11px; display: flex; align-items: center; gap: 6px; color: #4B5563; font-size: 10.5px; }
+  .ghost-btn .icon { width: 13px; height: 13px; color: #7C8797; }
+
+  .kpis { height: 100px; flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kpi { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.025); }
+  .kpi-top { display: flex; align-items: flex-start; justify-content: space-between; }
+  .kpi-label { color: var(--text-2); font-size: 11px; font-weight: 500; letter-spacing: .1px; }
+  .kpi-icon { width: 25px; height: 25px; border-radius: 7px; background: #F5F7FA; color: #6B7686; display: flex; align-items: center; justify-content: center; }
+  .kpi-icon .icon { width: 14px; height: 14px; }
+  .kpi-value { font-size: 27px; line-height: 1; font-weight: 600; letter-spacing: -.6px; margin-top: 7px; font-variant-numeric: tabular-nums; }
+  .kpi-value small { font-size: 11px; font-weight: 400; color: var(--text-3); letter-spacing: 0; margin-left: 3px; }
+  .kpi-foot { display: flex; align-items: center; gap: 5px; margin-top: 8px; color: #8A94A3; font-size: 10px; }
+  .kpi-foot .up { color: var(--accent); font-weight: 550; }
+  .kpi-foot .alert { color: var(--red); font-weight: 550; }
+  .spark { position: absolute; right: 15px; bottom: 13px; height: 24px; display: flex; align-items: flex-end; gap: 2.5px; }
+  .spark i { width: 2.5px; background: #DDE2E9; border-radius: 2px; }
+  .spark i.blue { background: #93B4FF; }
+  .spark i.hot { background: var(--accent); }
+  .spark i.red { background: #F0A9A2; }
+
+  .mid { height: 330px; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) 404px; gap: 20px; }
+  .bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 404px; gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.025); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .card-head { height: 52px; flex: none; padding: 0 18px; display: flex; align-items: center; border-bottom: 1px solid #EFF1F5; }
+  .card-title { font-size: 13px; font-weight: 600; letter-spacing: -.1px; display: flex; align-items: center; gap: 8px; }
+  .card-title .count { color: var(--text-3); font-size: 10px; font-weight: 500; background: #F3F5F8; border-radius: 5px; padding: 2px 5px; }
+  .card-link { margin-left: auto; color: var(--text-3); font-size: 10px; display: flex; align-items: center; gap: 3px; }
+  .card-link .icon { width: 12px; height: 12px; }
+
+  /* Project pulse */
+  .project-list { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 0 18px; }
+  .project-row { flex: 1; min-height: 0; display: flex; align-items: center; gap: 13px; border-top: 1px solid #F0F2F5; }
+  .project-row:first-child { border-top: 0; }
+  .cover { width: 45px; height: 45px; border-radius: 9px; flex: none; display: flex; align-items: flex-end; justify-content: space-between; padding: 8px; position: relative; overflow: hidden; }
+  .cover .mark { font-size: 17px; font-weight: 600; line-height: 1; }
+  .cover .kind { font-size: 6.5px; letter-spacing: .9px; font-weight: 600; opacity: .55; }
+  .cover-a { background: #0F172A; color: #F8FAFC; }
+  .cover-b { background: #1E293B; color: #E2E8F0; }
+  .cover-c { background: #DBEAFE; color: #1E40AF; }
+  .cover-c .kind { opacity: .7; }
+  .p-main { min-width: 0; width: 230px; flex: none; }
+  .p-name { font-size: 13px; font-weight: 600; color: #1A1F29; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-artist { margin-top: 5px; color: #858F9E; font-size: 10.5px; display: flex; align-items: center; gap: 6px; }
+  .p-artist .dot { width: 3px; height: 3px; border-radius: 50%; background: #C6CCD5; }
+  .stage-pill { height: 21px; padding: 0 8px; border-radius: 999px; background: var(--accent-soft); color: #1D4ED8; font-size: 10px; font-weight: 550; display: inline-flex; align-items: center; gap: 5px; flex: none; }
+  .stage-pill .sdot { width: 4px; height: 4px; border-radius: 50%; background: #3B82F6; }
+  .stage-pill.gray { background: #F2F4F7; color: #5B6575; }
+  .stage-pill.gray .sdot { background: #94A3B8; }
+  .stage-pill.dark { background: #F1F5F9; color: #334155; }
+  .stage-pill.dark .sdot { background: #475569; }
+  .p-progress { width: 178px; flex: none; }
+  .progress-meta { display: flex; align-items: center; justify-content: space-between; font-size: 9.5px; color: #98A1AE; margin-bottom: 7px; }
+  .progress-meta b { color: #4B5563; font-weight: 550; font-variant-numeric: tabular-nums; }
+  .bar { height: 5px; border-radius: 999px; background: #EDF0F4; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+  .bar i.muted { background: #7C8CA3; }
+  .p-due { width: 72px; flex: none; text-align: right; }
+  .due-date { color: #3F4856; font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .due-sub { color: #9AA3B0; font-size: 9px; margin-top: 5px; }
+  .due-sub.risk { color: var(--amber); }
+  .due-sub.over { color: var(--red); }
+  .avatars { width: 78px; flex: none; display: flex; align-items: center; justify-content: flex-end; padding-right: 2px; }
+  .avatar { width: 23px; height: 23px; border-radius: 50%; background: #E9EDF3; color: #475569; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600; margin-left: -6px; }
+  .avatar:first-child { margin-left: 0; }
+  .avatar.dark { background: #334155; color: #fff; }
+  .avatar.blue { background: #DBEAFE; color: #1D4ED8; }
+  .avatar.more { background: #F3F5F8; color: #7C8797; font-size: 7.5px; }
+
+  /* Schedule */
+  .schedule { flex: 1; padding: 4px 18px 0; display: flex; flex-direction: column; }
+  .sched-item { flex: 1; min-height: 0; display: flex; gap: 10px; position: relative; }
+  .sched-time { width: 38px; flex: none; padding-top: 13px; color: #6B7686; font-size: 9px; font-variant-numeric: tabular-nums; line-height: 1.35; }
+  .sched-time b { display: block; color: #3F4856; font-weight: 550; font-size: 9.5px; }
+  .timeline { width: 12px; flex: none; position: relative; }
+  .timeline::before { content: ""; position: absolute; left: 5px; top: 17px; bottom: -2px; width: 1px; background: #E8EBF0; }
+  .sched-item:last-child .timeline::before { display: none; }
+  .timeline i { position: absolute; left: 2px; top: 14px; width: 7px; height: 7px; border-radius: 50%; background: #fff; border: 2px solid #AEB8C6; }
+  .sched-item.active .timeline i { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .sched-body { flex: 1; min-width: 0; padding: 10px 0 11px; border-bottom: 1px solid #F0F2F5; }
+  .sched-item:last-child .sched-body { border-bottom: 0; }
+  .sched-top { display: flex; align-items: center; gap: 7px; }
+  .sched-title { font-size: 12px; font-weight: 600; color: #20252E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { height: 18px; padding: 0 6px; border-radius: 5px; display: inline-flex; align-items: center; font-size: 9px; font-weight: 550; flex: none; }
+  .tag.blue { background: var(--accent-soft); color: #1D4ED8; }
+  .tag.gray { background: #F2F4F7; color: #5B6575; }
+  .tag.outline { border: 1px solid #E1E5EB; color: #6B7686; background: #fff; }
+  .sched-meta { display: flex; align-items: center; gap: 7px; color: #939CA9; font-size: 9.5px; margin-top: 6px; }
+  .sched-meta .icon { width: 11px; height: 11px; }
+  .mini-avatars { display: flex; margin-left: auto; padding-left: 6px; flex: none; }
+  .mini-avatars .avatar { width: 18px; height: 18px; font-size: 6.5px; border-width: 1.5px; margin-left: -5px; }
+  .schedule-foot { height: 31px; flex: none; padding: 0 18px; display: flex; align-items: center; gap: 6px; border-top: 1px solid #F0F2F5; color: #7C8797; font-size: 9.5px; }
+  .schedule-foot .icon { width: 12px; height: 12px; }
+  .schedule-foot .right { margin-left: auto; color: var(--accent); font-weight: 550; }
+
+  /* Assets */
+  .asset-cols { height: 25px; flex: none; padding: 0 18px; display: flex; align-items: center; color: #9AA3B0; font-size: 9px; letter-spacing: .3px; border-bottom: 1px solid #F3F5F8; }
+  .asset-list { flex: 1; min-height: 0; padding: 0 18px; display: flex; flex-direction: column; }
+  .asset-row { flex: 1; min-height: 0; display: flex; align-items: center; gap: 10px; border-top: 1px solid #F2F4F7; }
+  .asset-row:first-child { border-top: 0; }
+  .play-btn { width: 28px; height: 28px; border-radius: 50%; flex: none; border: 1px solid #DCE2EA; background: #fff; display: flex; align-items: center; justify-content: center; color: #334155; }
+  .play-btn .icon { width: 11px; height: 11px; margin-left: 1px; }
+  .play-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,.22); }
+  .asset-main { min-width: 0; width: 250px; flex: none; }
+  .asset-name { font-size: 12px; font-weight: 550; color: #20252E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .asset-meta { margin-top: 4px; color: #929BA9; font-size: 9px; display: flex; gap: 6px; align-items: center; }
+  .asset-meta .sep { width: 2px; height: 2px; border-radius: 50%; background: #C9CFD8; }
+  .wave { width: 155px; height: 24px; flex: none; display: flex; align-items: center; gap: 1.6px; overflow: hidden; }
+  .wave i { display: block; width: 1.8px; border-radius: 1px; background: #D5DAE2; flex: none; }
+  .wave i.p { background: #8FB2F7; }
+  .wave i.cur { background: var(--accent); }
+  .vtag { width: 38px; flex: none; color: #5B6575; font-size: 9.5px; font-weight: 550; }
+  .status-pill { height: 20px; padding: 0 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 550; flex: none; }
+  .status-pill::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .75; }
+  .status-pill.review { background: var(--amber-soft); color: var(--amber); }
+  .status-pill.ok { background: var(--green-soft); color: var(--green); }
+  .status-pill.draft { background: #F2F4F7; color: #5B6575; }
+  .asset-duration { width: 44px; flex: none; text-align: right; color: #5B6575; font-size: 9.5px; }
+  .asset-time { width: 58px; flex: none; text-align: right; color: #9AA3B0; font-size: 9px; }
+  .more-btn { width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; color: #9AA3B0; }
+  .more-btn .icon { width: 15px; height: 15px; }
+
+  /* Activity */
+  .activity { flex: 1; min-height: 0; padding: 2px 18px 4px; display: flex; flex-direction: column; }
+  .act-item { flex: 1; min-height: 0; display: flex; align-items: flex-start; gap: 9px; padding: 10px 0; border-top: 1px solid #F2F4F7; }
+  .act-item:first-child { border-top: 0; }
+  .act-icon { width: 25px; height: 25px; border-radius: 7px; flex: none; display: flex; align-items: center; justify-content: center; background: #F3F5F8; color: #64748B; }
+  .act-icon .icon { width: 13px; height: 13px; }
+  .act-icon.blue { background: var(--accent-soft); color: #1D4ED8; }
+  .act-icon.dark { background: #EEF2F7; color: #334155; }
+  .act-body { min-width: 0; flex: 1; }
+  .act-text { color: #596372; font-size: 10.6px; line-height: 1.55; }
+  .act-text b { color: #1F2630; font-weight: 600; }
+  .act-time { color: #A2AAB6; font-size: 8.5px; margin-top: 2px; }
+  .act-item .avatar { width: 24px; height: 24px; margin-left: 0; border: 0; font-size: 8px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.4"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.4"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.4"/><rect x="14" y="14" width="6.5" height="6.5" rx="1.4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-check-square" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="m8 12.2 2.6 2.6L16 9.4"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17"/><path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6.2l10-2v11.3"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 21v-9"/><path d="m8 5.2 8 4.5"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6.5A2.5 2.5 0 0 1 4 16.5z"/><path d="M4 8h16M15 12h5v4h-5a2 2 0 0 1 0-4z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.54 15 1.7 1.7 0 0 0 3 14H3v-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.54 1.7 1.7 0 0 0 10 3V3h4v.09a1.7 1.7 0 0 0 1.03 1.51 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 21 10h.09v4H21a1.7 1.7 0 0 0-1.6 1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8.5a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m7 9.5 5 5 5-5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M17.5 14.8c2 .5 3.5 2.2 3.5 4.7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4.5 12h15M14 6.5l5.5 5.5-5.5 5.5"/></symbol>
+  <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/></symbol>
+  <symbol id="i-hard-drive" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 13h18M7 16.5h.01M10.5 16.5h.01"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16.5v2A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-2"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">月</div>
+      <div>
+        <div class="brand-name">月句</div>
+        <div class="brand-sub">MOONDOT · MUSIC OPS</div>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <div class="ws-avatar">夜</div>
+      <div>
+        <div class="ws-name">夜航工作室</div>
+        <div class="ws-role">本地工作区</div>
+      </div>
+      <svg class="icon"><use href="#i-chevron-down"/></svg>
+    </div>
+
+    <div class="nav-label">工作区</div>
+    <nav class="nav">
+      <div class="nav-item active"><svg class="icon"><use href="#i-grid"/></svg><span>工作台</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-folder"/></svg><span>项目</span><span class="nav-badge">6</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-check-square"/></svg><span>我的任务</span><span class="nav-badge">4</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-calendar"/></svg><span>日程</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-music"/></svg><span>素材库</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-package"/></svg><span>交付</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-wallet"/></svg><span>财务</span></div>
+      <div class="nav-item"><svg class="icon"><use href="#i-chart"/></svg><span>报表</span></div>
+    </nav>
+
+    <div class="sidebar-divider"></div>
+    <div class="recent-label">最近项目</div>
+    <div class="recent-item"><span class="recent-dot blue"></span><span>夜航</span><span class="r-stage">混音</span></div>
+    <div class="recent-item"><span class="recent-dot steel"></span><span>潮汐</span><span class="r-stage">编曲</span></div>
+    <div class="recent-item"><span class="recent-dot light"></span><span>城市失眠</span><span class="r-stage">母带</span></div>
+
+    <div class="backup-label">核心备份</div>
+    <div class="backup-row"><span class="backup-check">✓</span><span>上次备份 · 今天 09:20</span></div>
+    <div class="backup-warn"><span class="backup-warn-icon">!</span><span>完整素材未备份</span></div>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="storage-card">
+      <div class="storage-head"><span>素材库</span><svg class="icon"><use href="#i-hard-drive"/></svg></div>
+      <div class="storage-value">62.4 GB <span>/ 1 TB</span></div>
+      <div class="storage-bar"><i></i></div>
+      <div class="storage-foot"><span>缓存 4.2 GB</span><span>剩余 937 GB</span></div>
+    </div>
+
+    <div class="account">
+      <div class="account-avatar">林</div>
+      <div>
+        <div class="account-name">林深</div>
+        <div class="account-role">本机用户</div>
+      </div>
+      <svg class="icon"><use href="#i-settings"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumb"><span>夜航工作室</span><span class="crumb-slash">/</span><b>工作台</b></div>
+      <div class="searchbox">
+        <svg class="icon"><use href="#i-search"/></svg>
+        <span>搜索项目、任务、素材、费用…</span>
+        <span class="kbd">Ctrl K</span>
+      </div>
+      <div class="local-status"><span class="local-dot"></span>本地模式</div>
+      <div class="top-actions">
+        <button class="primary-btn"><svg class="icon"><use href="#i-plus"/></svg>新建项目</button>
+        <button class="icon-btn"><svg class="icon"><use href="#i-bell"/></svg><span class="dot-badge"></span></button>
+        <div class="top-avatar">林</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1>下午好，林深</h1>
+          <div class="page-sub">
+            <span>今天有 <b style="color:#374151;font-weight:600">3</b> 个棚时</span>
+            <span class="sep"></span>
+            <span class="warn">2 个项目需要关注</span>
+            <span class="sep"></span>
+            <span style="color:#B42318">4 个逾期任务</span>
+          </div>
+        </div>
+        <div class="head-right">
+          <div class="date-chip"><svg class="icon"><use href="#i-calendar"/></svg>11 月 4 日 · 周三</div>
+          <button class="ghost-btn"><svg class="icon"><use href="#i-sliders"/></svg>视图</button>
+        </div>
+      </div>
+
+      <section class="kpis">
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-label">进行中项目</div>
+            <div class="kpi-icon"><svg class="icon"><use href="#i-disc"/></svg></div>
+          </div>
+          <div class="kpi-value">6</div>
+          <div class="kpi-foot"><span class="up">+1</span><span>较上周</span></div>
+          <div class="spark"><i style="height:7px"></i><i style="height:11px"></i><i style="height:8px"></i><i style="height:14px"></i><i style="height:12px"></i><i style="height:17px"></i><i style="height:15px"></i><i class="blue" style="height:20px"></i><i class="hot" style="height:23px"></i></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-label">本周待交付</div>
+            <div class="kpi-icon"><svg class="icon"><use href="#i-package"/></svg></div>
+          </div>
+          <div class="kpi-value">2</div>
+          <div class="kpi-foot"><span>1 个已确认</span></div>
+          <div class="spark"><i style="height:9px"></i><i style="height:13px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:13px"></i><i style="height:18px"></i><i class="blue" style="height:15px"></i><i class="hot" style="height:22px"></i></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-label">今日棚时</div>
+            <div class="kpi-icon"><svg class="icon"><use href="#i-clock"/></svg></div>
+          </div>
+          <div class="kpi-value">3 <small>场</small></div>
+          <div class="kpi-foot"><span>10:00 开始 · 棚 A</span></div>
+          <div class="spark"><i style="height:6px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:9px"></i><i style="height:15px"></i><i style="height:12px"></i><i class="blue" style="height:18px"></i><i class="hot" style="height:21px"></i></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top">
+            <div class="kpi-label">预算预警</div>
+            <div class="kpi-icon"><svg class="icon"><use href="#i-wallet"/></svg></div>
+          </div>
+          <div class="kpi-value" style="color:#B45309">2</div>
+          <div class="kpi-foot"><span class="alert">1 个项目超支</span></div>
+          <div class="spark"><i style="height:19px"></i><i style="height:15px"></i><i style="height:17px"></i><i style="height:11px"></i><i style="height:14px"></i><i class="red" style="height:21px"></i><i class="red" style="height:23px"></i></div>
+        </div>
+      </section>
+
+      <section class="mid">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">项目脉搏 <span class="count">6</span></div>
+            <div class="card-link">查看全部 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
+          </div>
+          <div class="project-list">
+            <div class="project-row">
+              <div class="cover cover-a"><span class="mark">夜</span><span class="kind">SINGLE</span></div>
+              <div class="p-main">
+                <div class="p-name">夜航</div>
+                <div class="p-artist">陈屿 <span class="dot"></span> 流行 / 48 kHz</div>
+              </div>
+              <span class="stage-pill"><span class="sdot"></span>混音</span>
+              <div class="p-progress">
+                <div class="progress-meta"><span>阶段进度</span><b>68%</b></div>
+                <div class="bar"><i style="width:68%"></i></div>
+              </div>
+              <div class="p-due"><div class="due-date">11 / 08</div><div class="due-sub risk">还剩 4 天</div></div>
+              <div class="avatars"><span class="avatar dark">林</span><span class="avatar">陈</span><span class="avatar blue">北</span><span class="avatar more">+2</span></div>
+            </div>
+            <div class="project-row">
+              <div class="cover cover-b"><span class="mark">潮</span><span class="kind">EP</span></div>
+              <div class="p-main">
+                <div class="p-name">潮汐</div>
+                <div class="p-artist">北岸 <span class="dot"></span> 独立 / 44.1 kHz</div>
+              </div>
+              <span class="stage-pill gray"><span class="sdot"></span>编曲</span>
+              <div class="p-progress">
+                <div class="progress-meta"><span>阶段进度</span><b>42%</b></div>
+                <div class="bar"><i class="muted" style="width:42%"></i></div>
+              </div>
+              <div class="p-due"><div class="due-date">11 / 15</div><div class="due-sub">还剩 11 天</div></div>
+              <div class="avatars"><span class="avatar">北</span><span class="avatar blue">林</span><span class="avatar">许</span></div>
+            </div>
+            <div class="project-row">
+              <div class="cover cover-c"><span class="mark">城</span><span class="kind">ALBUM</span></div>
+              <div class="p-main">
+                <div class="p-name">城市失眠</div>
+                <div class="p-artist">厂牌合辑 <span class="dot"></span> 另类 / 48 kHz</div>
+              </div>
+              <span class="stage-pill dark"><span class="sdot"></span>母带</span>
+              <div class="p-progress">
+                <div class="progress-meta"><span>阶段进度</span><b>91%</b></div>
+                <div class="bar"><i style="width:91%"></i></div>
+              </div>
+              <div class="p-due"><div class="due-date">11 / 06</div><div class="due-sub over">已超期 1 天</div></div>
+              <div class="avatars"><span class="avatar dark">林</span><span class="avatar blue">周</span><span class="avatar more">+3</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">今日安排</div>
+            <div class="card-link">日历 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
+          </div>
+          <div class="schedule">
+            <div class="sched-item active">
+              <div class="sched-time"><b>10:00</b>12:30</div>
+              <div class="timeline"><i></i></div>
+              <div class="sched-body">
+                <div class="sched-top"><span class="sched-title">夜航 · 人声补录</span><span class="tag blue">录音</span></div>
+                <div class="sched-meta"><svg class="icon"><use href="#i-clock"/></svg>2.5 小时 <span>·</span> 录音棚 A <div class="mini-avatars"><span class="avatar dark">林</span></div></div>
+              </div>
+            </div>
+            <div class="sched-item">
+              <div class="sched-time"><b>14:30</b>17:00</div>
+              <div class="timeline"><i></i></div>
+              <div class="sched-body">
+                <div class="sched-top"><span class="sched-title">潮汐 · 初混试听</span><span class="tag gray">混音</span></div>
+                <div class="sched-meta"><svg class="icon"><use href="#i-clock"/></svg>2.5 小时 <span>·</span> 混音间 <div class="mini-avatars"><span class="avatar blue">北</span></div></div>
+              </div>
+            </div>
+            <div class="sched-item">
+              <div class="sched-time"><b>19:00</b>20:00</div>
+              <div class="timeline"><i></i></div>
+              <div class="sched-body">
+                <div class="sched-top"><span class="sched-title">城市失眠 · 交付确认</span><span class="tag outline">会议</span></div>
+                <div class="sched-meta"><svg class="icon"><use href="#i-users"/></svg>线上会议 <span>·</span> 3 人 <div class="mini-avatars"><span class="avatar dark">林</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="schedule-foot"><svg class="icon"><use href="#i-calendar"/></svg>本周共 7 个安排<span class="right">空闲：周四下午</span></div>
+        </div>
+      </section>
+
+      <section class="bottom">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">最近素材</div>
+            <div class="card-link">打开素材库 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
+          </div>
+          <div class="asset-cols">
+            <span style="width:28px"></span>
+            <span style="width:250px">文件</span>
+            <span style="width:155px">波形</span>
+            <span style="width:38px">版本</span>
+            <span style="width:74px">状态</span>
+            <span style="flex:1;text-align:right">时长</span>
+            <span style="width:58px;text-align:right">更新</span>
+            <span style="width:22px"></span>
+          </div>
+          <div class="asset-list">
+            <div class="asset-row">
+              <button class="play-btn active" aria-label="播放"><svg class="icon"><use href="#i-play"/></svg></button>
+              <div class="asset-main">
+                <div class="asset-name">夜航_Mix_v4.wav</div>
+                <div class="asset-meta">混音 <span class="sep"></span> 48 kHz / 24 bit <span class="sep"></span> 2.1 GB</div>
+              </div>
+              <div class="wave" data-wave data-seed="7" data-bars="54" data-played="0.34"></div>
+              <div class="vtag mono">V4</div>
+              <span class="status-pill review">待确认</span>
+              <div class="asset-duration mono">02:14</div>
+              <div class="asset-time">12 分钟前</div>
+              <div class="more-btn"><svg class="icon"><use href="#i-more"/></svg></div>
+            </div>
+            <div class="asset-row">
+              <button class="play-btn" aria-label="播放"><svg class="icon"><use href="#i-play"/></svg></button>
+              <div class="asset-main">
+                <div class="asset-name">潮汐_Arrangement_v2.wav</div>
+                <div class="asset-meta">编曲 <span class="sep"></span> 44.1 kHz / 24 bit <span class="sep"></span> 1.4 GB</div>
+              </div>
+              <div class="wave" data-wave data-seed="13" data-bars="54" data-played="0"></div>
+              <div class="vtag mono">V2</div>
+              <span class="status-pill draft">草稿</span>
+              <div class="asset-duration mono">03:02</div>
+              <div class="asset-time">38 分钟前</div>
+              <div class="more-btn"><svg class="icon"><use href="#i-more"/></svg></div>
+            </div>
+            <div class="asset-row">
+              <button class="play-btn" aria-label="播放"><svg class="icon"><use href="#i-play"/></svg></button>
+              <div class="asset-main">
+                <div class="asset-name">城市失眠_Master_v1.wav</div>
+                <div class="asset-meta">母带 <span class="sep"></span> 48 kHz / 24 bit <span class="sep"></span> 1.8 GB</div>
+              </div>
+              <div class="wave" data-wave data-seed="21" data-bars="54" data-played="0"></div>
+              <div class="vtag mono">V1</div>
+              <span class="status-pill ok">已确认</span>
+              <div class="asset-duration mono">04:16</div>
+              <div class="asset-time">1 小时前</div>
+              <div class="more-btn"><svg class="icon"><use href="#i-more"/></svg></div>
+            </div>
+            <div class="asset-row">
+              <button class="play-btn" aria-label="播放"><svg class="icon"><use href="#i-play"/></svg></button>
+              <div class="asset-main">
+                <div class="asset-name">夜航_Stem_Drums.wav</div>
+                <div class="asset-meta">分轨 <span class="sep"></span> 48 kHz / 24 bit <span class="sep"></span> 216 MB</div>
+              </div>
+              <div class="wave" data-wave data-seed="33" data-bars="54" data-played="0"></div>
+              <div class="vtag mono">V4</div>
+              <span class="status-pill draft">分轨</span>
+              <div class="asset-duration mono">02:14</div>
+              <div class="asset-time">2 小时前</div>
+              <div class="more-btn"><svg class="icon"><use href="#i-more"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">动态</div>
+            <div class="card-link">全部 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
+          </div>
+          <div class="activity">
+            <div class="act-item">
+              <div class="act-icon blue"><svg class="icon"><use href="#i-check"/></svg></div>
+              <div class="act-body">
+                <div class="act-text"><b>林深</b> 确认了 <b>夜航 · Mix V3</b></div>
+                <div class="act-time">12 分钟前</div>
+              </div>
+            </div>
+            <div class="act-item">
+              <div class="act-icon dark"><svg class="icon"><use href="#i-upload"/></svg></div>
+              <div class="act-body">
+                <div class="act-text"><b>林深</b> 导入了 <b>潮汐 · Arrangement V2</b></div>
+                <div class="act-time">38 分钟前</div>
+              </div>
+            </div>
+            <div class="act-item">
+              <div class="act-icon"><svg class="icon"><use href="#i-hard-drive"/></svg></div>
+              <div class="act-body">
+                <div class="act-text">每日数据库备份已完成 <b>· 18.6 MB</b></div>
+                <div class="act-time">1 小时前</div>
+              </div>
+            </div>
+            <div class="act-item">
+              <div class="act-icon"><svg class="icon"><use href="#i-check-square"/></svg></div>
+              <div class="act-body">
+                <div class="act-text"><b>林深</b> 完成了任务 <b>「确认母带响度」</b></div>
+                <div class="act-time">2 小时前</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+  function rng(seed) {
+    let s = seed % 2147483647;
+    if (s <= 0) s += 2147483646;
+    return function () {
+      s = (s * 16807) % 2147483647;
+      return (s - 1) / 2147483646;
+    };
+  }
+  document.querySelectorAll('[data-wave]').forEach(function (el) {
+    const seed = Number(el.dataset.seed || 1);
+    const count = Number(el.dataset.bars || 48);
+    const played = Number(el.dataset.played || 0);
+    const rand = rng(seed * 97);
+    for (let i = 0; i < count; i++) {
+      const env = 0.42 + 0.58 * Math.abs(Math.sin(i * 0.31 + seed));
+      const detail = 0.28 + 0.72 * rand();
+      const gate = Math.abs(Math.sin(i * 1.73 + seed * 2.1)) > 0.18 ? 1 : 0.3;
+      const h = Math.max(3, Math.round(2 + env * detail * gate * 21));
+      const bar = document.createElement('i');
+      bar.style.height = h + 'px';
+      if (i / count < played) bar.className = i / count > played - 0.035 ? 'cur' : 'p';
+      el.appendChild(bar);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+name: Desktop checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.10.1
+          run_install: false
+      - name: Verify supported runner architecture
+        run: node -e "if(process.platform === 'darwin' && process.arch !== 'arm64') throw new Error('Apple Silicon runner required');"
+      - run: pnpm install --frozen-lockfile
+      - name: Ensure Electron runtime is installed
+        run: node node_modules/electron/install.js
+      - run: pnpm check
+      - name: Build unpacked desktop application
+        run: pnpm exec electron-builder --dir --publish never
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checks-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: ignore
