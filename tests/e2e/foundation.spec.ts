@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import Database from 'better-sqlite3'
 import type { MoonDotApi } from '../../src/shared/system'
 
 async function environment() {
@@ -35,20 +36,50 @@ test('设置通过主进程持久化，重启保留窗口状态并展示许可�
       }),
     )
     expect(invalid).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } })
-    const bounds = await application.evaluate(({ BrowserWindow }) => {
+    const bounds = await application.evaluate(({ BrowserWindow, screen }) => {
       const window = BrowserWindow.getAllWindows()[0]!
-      window.setBounds({ x: 80, y: 80, width: 1200, height: 800 })
-      return window.getNormalBounds()
+      const area = screen.getDisplayMatching(window.getBounds()).workArea
+      const [minWidth, minHeight] = window.getMinimumSize()
+      // setBounds can exceed the display, but a newly created window may be clamped by the OS.
+      const width = Math.max(minWidth!, Math.min(1200, area.width))
+      const height = Math.max(minHeight!, Math.min(800, area.height))
+      const target = {
+        x: area.x + Math.max(0, Math.min(80, area.width - width)),
+        y: area.y + Math.max(0, Math.min(80, area.height - height)),
+        width,
+        height,
+      }
+      window.setBounds(target)
+      return target
     })
+    await expect
+      .poll(() =>
+        application!.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
+        ),
+      )
+      .toEqual(bounds)
     await application.close()
+    const savedDatabase = new Database(join(directory, 'data/moondot.db'), { readonly: true })
+    try {
+      const saved = savedDatabase
+        .prepare("SELECT value FROM app_settings WHERE key = 'window'")
+        .get() as { value: string } | undefined
+      expect(saved).toBeDefined()
+      expect(JSON.parse(saved!.value)).toEqual({ ...bounds, maximized: false })
+    } finally {
+      savedDatabase.close()
+    }
     application = await electron.launch({ args: [resolve('.')], env })
     page = await application.firstWindow()
     await expect(page.getByRole('heading', { name: '你好，月句测试音乐人' })).toBeVisible()
-    expect(
-      await application.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
-      ),
-    ).toEqual(bounds)
+    await expect
+      .poll(() =>
+        application!.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]!.getNormalBounds(),
+        ),
+      )
+      .toEqual(bounds)
     await page.screenshot({ path: test.info().outputPath('workspace.png') })
     await application.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]!.webContents.setZoomFactor(2),

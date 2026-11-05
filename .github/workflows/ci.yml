@@ -31,7 +31,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Ensure Electron runtime is installed
         run: node node_modules/electron/install.js
-      - run: pnpm check
+      - name: Lint
+        run: pnpm lint
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Unit and integration tests
+        run: pnpm test:unit
+      - name: Typecheck and build
+        run: pnpm build
+      - name: Electron end-to-end tests
+        run: pnpm test
       - name: Build unpacked desktop application
         run: pnpm exec electron-builder --dir --publish never
       - uses: actions/upload-artifact@v4
