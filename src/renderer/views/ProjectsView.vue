@@ -120,7 +120,7 @@ function confirmDeletion(project: Project, files: boolean) {
     </button>
   </div>
   <form
-    class="toolbar"
+    class="toolbar project-filters"
     @submit.prevent="
       () => {
         filter()

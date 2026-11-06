@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { NModal } from 'naive-ui'
 import {
   Check,
@@ -25,6 +25,7 @@ import {
 } from '../../shared/work'
 import { projectDefaults, result, work } from '../work'
 import ProjectDateField from './ProjectDateField.vue'
+import MotionView from './MotionView.vue'
 const props = defineProps<{ project?: Project }>()
 const emit = defineEmits<{ close: []; saved: [id: string] }>()
 const draft = reactive<ProjectDraft>(
@@ -64,6 +65,15 @@ const step = ref(1),
   error = ref(''),
   busy = ref(false),
   coverBusy = ref(false)
+const editorForm = ref<HTMLFormElement>()
+watch(
+  step,
+  () => {
+    // Long personnel/review steps should not leave the next step scrolled past its heading.
+    editorForm.value?.closest('.editor-modal')?.scrollTo({ top: 0, behavior: 'instant' })
+  },
+  { flush: 'post' },
+)
 const coverInput = ref<HTMLInputElement>(),
   coverName = ref(''),
   coverSize = ref(''),
@@ -259,6 +269,7 @@ async function save() {
       </li>
     </ol>
     <form
+      ref="editorForm"
       class="form-stack"
       @submit.prevent="step < 5 ? next() : save()"
     >
@@ -266,384 +277,396 @@ async function save() {
         :disabled="busy"
         class="form-stack"
       >
-        <div
-          v-if="step === 1"
-          class="form-stack"
+        <MotionView
+          :active-key="step"
+          kind="step"
+          class="wizard-panels"
         >
-          <h2>为这次创作起个名字</h2>
-          <label>
-            项目名称
-            <input
-              v-model="draft.name"
-              required
-              maxlength="120"
-              autofocus
-            />
-          </label>
-          <section
-            class="cover-field"
-            aria-label="项目封面"
+          <div
+            v-if="step === 1"
+            class="form-stack"
           >
-            <div class="cover-heading">
-              <span>项目封面</span>
-              <span class="cover-optional">选填</span>
-            </div>
-            <input
-              ref="coverInput"
-              class="sr-only"
-              tabindex="-1"
-              aria-label="项目封面（选填）"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              :disabled="coverBusy"
-              @change="cover"
-            />
-            <div
-              class="cover-upload"
-              :class="{ 'is-dragging': coverDragging, 'has-cover': !!draft.cover }"
-              :aria-busy="coverBusy"
-              @dragover.prevent="coverDragging = !busy && !coverBusy"
-              @dragleave.self="coverDragging = false"
-              @drop.prevent="dropCover"
+            <h2>为这次创作起个名字</h2>
+            <label>
+              项目名称
+              <input
+                v-model="draft.name"
+                required
+                maxlength="120"
+                autofocus
+              />
+            </label>
+            <section
+              class="cover-field"
+              aria-label="项目封面"
             >
-              <button
-                class="cover-art"
-                type="button"
+              <div class="field-heading">
+                <span>项目封面</span>
+                <span class="optional-badge">选填</span>
+              </div>
+              <input
+                ref="coverInput"
+                class="sr-only"
+                tabindex="-1"
+                aria-label="项目封面（选填）"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
                 :disabled="coverBusy"
-                :aria-label="draft.cover ? '更换项目封面' : '选择项目封面'"
-                @click="coverInput?.click()"
+                @change="cover"
+              />
+              <div
+                class="cover-upload"
+                :class="{ 'is-dragging': coverDragging, 'has-cover': !!draft.cover }"
+                :aria-busy="coverBusy"
+                @dragover.prevent="coverDragging = !busy && !coverBusy"
+                @dragleave.self="coverDragging = false"
+                @drop.prevent="dropCover"
               >
-                <img
-                  v-if="draft.cover"
-                  :src="draft.cover"
-                  alt="项目封面预览"
-                  class="cover-preview"
-                />
-                <template v-else>
-                  <span class="cover-disc">
-                    <Disc3
-                      :size="58"
-                      :stroke-width="1"
-                      aria-hidden="true"
-                    />
-                  </span>
-                  <span class="cover-art-caption">YOUR NEXT SOUND</span>
-                </template>
-                <span class="cover-art-edit">
-                  <ImagePlus
-                    :size="15"
-                    aria-hidden="true"
-                  />
-                </span>
-              </button>
-              <div class="cover-content">
-                <strong>
-                  {{
-                    coverDragging
-                      ? '松开鼠标，上传封面'
-                      : draft.cover
-                        ? '让作品拥有自己的面孔'
-                        : '给这次创作一个画面'
-                  }}
-                </strong>
-                <p class="cover-help">点击选择或将图片拖到这里</p>
-                <p
-                  v-if="draft.cover"
-                  class="cover-file"
-                  :title="coverName || '当前项目封面'"
+                <button
+                  class="cover-art"
+                  type="button"
+                  :disabled="coverBusy"
+                  :aria-label="draft.cover ? '更换项目封面' : '选择项目封面'"
+                  @click="coverInput?.click()"
                 >
-                  {{ coverName || '当前项目封面' }}
-                  <span v-if="coverSize">· {{ coverSize }}</span>
-                </p>
-                <div class="cover-actions">
-                  <button
-                    type="button"
-                    :disabled="coverBusy"
-                    @click="coverInput?.click()"
-                  >
-                    <Upload
+                  <img
+                    v-if="draft.cover"
+                    :src="draft.cover"
+                    alt="项目封面预览"
+                    class="cover-preview"
+                  />
+                  <template v-else>
+                    <span class="cover-disc">
+                      <Disc3
+                        :size="58"
+                        :stroke-width="1"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="cover-art-caption">YOUR NEXT SOUND</span>
+                  </template>
+                  <span class="cover-art-edit">
+                    <ImagePlus
                       :size="15"
                       aria-hidden="true"
                     />
-                    {{ draft.cover ? '更换图片' : '选择图片' }}
-                  </button>
-                  <button
+                  </span>
+                </button>
+                <div class="cover-content">
+                  <strong>
+                    {{
+                      coverDragging
+                        ? '松开鼠标，上传封面'
+                        : draft.cover
+                          ? '让作品拥有自己的面孔'
+                          : '给这次创作一个画面'
+                    }}
+                  </strong>
+                  <p class="cover-help">点击选择或将图片拖到这里</p>
+                  <p
                     v-if="draft.cover"
-                    type="button"
-                    class="cover-remove"
-                    :disabled="coverBusy"
-                    @click="removeCover"
+                    class="cover-file"
+                    :title="coverName || '当前项目封面'"
                   >
-                    <Trash2
-                      :size="14"
-                      aria-hidden="true"
-                    />
-                    移除封面
-                  </button>
+                    {{ coverName || '当前项目封面' }}
+                    <span v-if="coverSize">· {{ coverSize }}</span>
+                  </p>
+                  <div class="cover-actions">
+                    <button
+                      type="button"
+                      :disabled="coverBusy"
+                      @click="coverInput?.click()"
+                    >
+                      <Upload
+                        :size="15"
+                        aria-hidden="true"
+                      />
+                      {{ draft.cover ? '更换图片' : '选择图片' }}
+                    </button>
+                    <button
+                      v-if="draft.cover"
+                      type="button"
+                      class="cover-remove"
+                      :disabled="coverBusy"
+                      @click="removeCover"
+                    >
+                      <Trash2
+                        :size="14"
+                        aria-hidden="true"
+                      />
+                      移除封面
+                    </button>
+                  </div>
+                  <p
+                    class="cover-limit"
+                    role="status"
+                  >
+                    {{ coverBusy ? '正在读取图片…' : 'PNG、JPEG、WebP · 最大 10 MB' }}
+                  </p>
                 </div>
-                <p
-                  class="cover-limit"
-                  role="status"
-                >
-                  {{ coverBusy ? '正在读取图片…' : 'PNG、JPEG、WebP · 最大 10 MB' }}
-                </p>
               </div>
-            </div>
-          </section>
-          <label>
-            项目备注（选填）
-            <textarea
-              v-model="draft.description"
-              rows="4"
-              maxlength="10000"
-              placeholder="记录创作想法、制作要求或其他说明"
-            />
-          </label>
-        </div>
-        <div
-          v-if="step === 2"
-          class="form-stack"
-        >
-          <h2>选择项目类型</h2>
-          <p class="muted">用于识别项目，不限制歌曲数量或岗位人员。</p>
-          <div
-            class="type-options"
-            role="radiogroup"
-            aria-label="项目类型"
-          >
-            <label
-              v-for="option in typeOptions"
-              :key="option.key"
-              class="type-option"
-              :class="{ selected: type === option.key }"
-            >
-              <input
-                v-model="type"
-                type="radio"
-                name="project-type"
-                :value="option.key"
-                :aria-label="option.name"
-                required
-              />
-              <span class="type-option-top">
-                <span class="type-option-icon">
-                  <component
-                    :is="option.icon"
-                    :size="25"
-                    :stroke-width="1.6"
-                  />
-                </span>
-                <span class="type-option-check">
-                  <Check
-                    v-if="type === option.key"
-                    :size="13"
-                  />
-                </span>
+            </section>
+            <label>
+              <span class="field-heading">
+                <span>项目备注</span>
+                <span class="optional-badge">选填</span>
               </span>
-              <strong>{{ option.name }}</strong>
-              <small>{{ option.english }}</small>
-              <span class="type-option-description">{{ option.description }}</span>
+              <textarea
+                v-model="draft.description"
+                aria-label="项目备注（选填）"
+                rows="4"
+                maxlength="10000"
+                placeholder="记录创作想法、制作要求或其他说明"
+              />
             </label>
           </div>
-        </div>
-        <div
-          v-if="step === 3"
-          class="form-stack"
-        >
-          <h2>一起完成这次创作的人</h2>
-          <p class="muted">
-            每个岗位可填写多人，用逗号或换行分隔，同一人可以担任多个岗位。可留空并点击“下一步”，稍后补充。
-          </p>
-          <details
-            v-for="(phase, index) in phases"
-            :key="phase.key"
-            class="stage-section"
+          <div
+            v-if="step === 2"
+            class="form-stack"
           >
-            <summary>
-              {{ phase.name }}
-              <span>{{ stageCount(index) }} 人</span>
-            </summary>
-            <div class="form-grid">
+            <h2>选择项目类型</h2>
+            <p class="muted">用于识别项目，不限制歌曲数量或岗位人员。</p>
+            <div
+              class="type-options"
+              role="radiogroup"
+              aria-label="项目类型"
+            >
               <label
-                v-for="(role, roleIndex) in phase.roles"
-                :key="role"
+                v-for="option in typeOptions"
+                :key="option.key"
+                class="type-option"
+                :class="{ selected: type === option.key }"
               >
-                {{ role }}
-                <textarea
-                  v-model="peopleText[index]![role]"
-                  rows="2"
-                  :maxlength="MAX_PEOPLE_INPUT"
-                  class="personnel-input"
-                  :aria-label="role"
-                  :aria-invalid="!!parsedPeople[index]![role]?.error"
-                  :aria-describedby="`people-error-${index}-${roleIndex}`"
-                  placeholder="待添加"
+                <input
+                  v-model="type"
+                  type="radio"
+                  name="project-type"
+                  :value="option.key"
+                  :aria-label="option.name"
+                  required
                 />
-                <small
-                  v-if="parsedPeople[index]![role]?.error"
-                  :id="`people-error-${index}-${roleIndex}`"
-                  class="error-text"
-                >
-                  {{ parsedPeople[index]![role]!.error }}
-                </small>
+                <span class="type-option-top">
+                  <span class="type-option-icon">
+                    <component
+                      :is="option.icon"
+                      :size="25"
+                      :stroke-width="1.6"
+                    />
+                  </span>
+                  <span class="type-option-check">
+                    <Check
+                      v-if="type === option.key"
+                      :size="13"
+                    />
+                  </span>
+                </span>
+                <strong>{{ option.name }}</strong>
+                <small>{{ option.english }}</small>
+                <span class="type-option-description">{{ option.description }}</span>
               </label>
             </div>
-          </details>
-        </div>
-        <div
-          v-if="step === 4"
-          class="form-stack schedule-step"
-        >
-          <div class="schedule-heading">
-            <div>
-              <h2>留出从容创作的时间</h2>
-              <p class="muted">选择日期或使用日历快捷选项。可留空并点击“下一步”，稍后补充。</p>
-            </div>
-            <CalendarDays
-              :size="28"
-              :stroke-width="1.5"
-            />
           </div>
-          <div class="schedule-summary">
-            <span>阶段交付安排</span>
-            <span>{{ scheduledCount }} / 5 已设置</span>
-          </div>
-          <div class="schedule-list">
-            <div
+          <div
+            v-if="step === 3"
+            class="form-stack"
+          >
+            <h2>一起完成这次创作的人</h2>
+            <p class="muted">
+              每个岗位可填写多人，用逗号或换行分隔，同一人可以担任多个岗位。可留空并点击“下一步”，稍后补充。
+            </p>
+            <details
               v-for="(phase, index) in phases"
               :key="phase.key"
-              class="schedule-row"
+              class="stage-section"
             >
-              <span class="schedule-number">{{ String(index + 1).padStart(2, '0') }}</span>
-              <span class="schedule-phase">{{ phase.name }}</span>
+              <summary>
+                {{ phase.name }}
+                <span>{{ stageCount(index) }} 人</span>
+              </summary>
+              <div class="form-grid">
+                <label
+                  v-for="(role, roleIndex) in phase.roles"
+                  :key="role"
+                >
+                  {{ role }}
+                  <textarea
+                    v-model="peopleText[index]![role]"
+                    rows="2"
+                    :maxlength="MAX_PEOPLE_INPUT"
+                    class="personnel-input"
+                    :aria-label="role"
+                    :aria-invalid="!!parsedPeople[index]![role]?.error"
+                    :aria-describedby="`people-error-${index}-${roleIndex}`"
+                    placeholder="待添加"
+                  />
+                  <small
+                    v-if="parsedPeople[index]![role]?.error"
+                    :id="`people-error-${index}-${roleIndex}`"
+                    class="error-text"
+                  >
+                    {{ parsedPeople[index]![role]!.error }}
+                  </small>
+                </label>
+              </div>
+            </details>
+          </div>
+          <div
+            v-if="step === 4"
+            class="form-stack schedule-step"
+          >
+            <div class="schedule-heading">
+              <div>
+                <h2>留出从容创作的时间</h2>
+                <p class="muted">选择日期或使用日历快捷选项。可留空并点击“下一步”，稍后补充。</p>
+              </div>
+              <CalendarDays
+                :size="28"
+                :stroke-width="1.5"
+              />
+            </div>
+            <div class="schedule-summary">
+              <span>阶段交付安排</span>
+              <span>{{ scheduledCount }} / 5 已设置</span>
+            </div>
+            <div class="schedule-list">
+              <div
+                v-for="(phase, index) in phases"
+                :key="phase.key"
+                class="schedule-row"
+              >
+                <span class="schedule-number">{{ String(index + 1).padStart(2, '0') }}</span>
+                <span class="schedule-phase">{{ phase.name }}</span>
+                <ProjectDateField
+                  v-model="draft.stages[index]!.dueDate"
+                  :label="phase.name + '交付日期'"
+                  :disabled="busy"
+                />
+              </div>
+            </div>
+            <div class="deadline-card">
+              <div>
+                <Flag :size="20" />
+                <div>
+                  <strong>项目截止日期</strong>
+                  <small>为整个项目留一个目标日期</small>
+                </div>
+              </div>
               <ProjectDateField
-                v-model="draft.stages[index]!.dueDate"
-                :label="phase.name + '交付日期'"
+                v-model="draft.dueDate"
+                label="项目截止日期"
                 :disabled="busy"
               />
             </div>
           </div>
-          <div class="deadline-card">
-            <div>
-              <Flag :size="20" />
-              <div>
-                <strong>项目截止日期</strong>
-                <small>为整个项目留一个目标日期</small>
-              </div>
-            </div>
-            <ProjectDateField
-              v-model="draft.dueDate"
-              label="项目截止日期"
-              :disabled="busy"
-            />
-          </div>
-        </div>
-        <div
-          v-if="step === 5"
-          class="form-stack"
-        >
-          <h2>{{ project ? '确认项目信息' : '一切就绪，开始创作' }}</h2>
-          <div class="review-hero">
-            <img
-              v-if="draft.cover"
-              :src="draft.cover"
-              alt="项目封面"
-              class="cover-preview"
-            />
-            <div>
-              <strong>{{ draft.name }}</strong>
-              <p>
-                {{ projectTypes[type as keyof typeof projectTypes] }} · 截止日期
-                {{ draft.dueDate || '未设置' }}
-              </p>
-            </div>
-          </div>
-          <p class="preserve-text">{{ draft.description || '未填写项目备注' }}</p>
           <div
-            v-for="(phase, index) in phases"
-            :key="phase.key"
-            class="review-stage"
+            v-if="step === 5"
+            class="form-stack"
           >
-            <strong>{{ phase.name }} · {{ draft.stages[index]!.dueDate || '未设交付日期' }}</strong>
-            <p
-              v-for="role in phase.roles"
-              :key="role"
-            >
-              {{ role }}：{{ draft.stages[index]!.people[role]?.join('、') || '待添加' }}
-            </p>
-          </div>
-          <section
-            v-if="!project"
-            class="project-location"
-          >
-            <div class="location-heading">
-              <span class="location-icon"><FolderOpen :size="22" /></span>
+            <h2>{{ project ? '确认项目信息' : '一切就绪，开始创作' }}</h2>
+            <div class="review-hero">
+              <img
+                v-if="draft.cover"
+                :src="draft.cover"
+                alt="项目封面"
+                class="cover-preview"
+              />
               <div>
-                <h3>项目存放位置</h3>
+                <strong>{{ draft.name }}</strong>
                 <p>
-                  {{
-                    directory === defaultDirectory && directory
-                      ? '系统文档文件夹 · 默认位置'
-                      : '自定义位置'
-                  }}
+                  {{ projectTypes[type as keyof typeof projectTypes] }} · 截止日期
+                  {{ draft.dueDate || '未设置' }}
                 </p>
               </div>
-              <span
-                v-if="directory === defaultDirectory && directory"
-                class="location-badge"
-              >
-                默认
-              </span>
             </div>
-            <label class="location-path">
-              <span class="sr-only">项目存放位置</span>
-              <input
-                :value="directory"
-                readonly
-                :placeholder="directoryBusy ? '正在准备默认目录…' : '请选择可写的存放位置'"
-              />
-            </label>
-            <div class="location-preview">
-              <Folder :size="16" />
-              <span>独立项目文件夹</span>
-              <span class="muted">内含 5 个阶段文件夹</span>
-            </div>
-            <p
-              v-if="directoryError"
-              role="alert"
-              class="error-text"
+            <p class="preserve-text">{{ draft.description || '未填写项目备注' }}</p>
+            <div
+              v-for="(phase, index) in phases"
+              :key="phase.key"
+              class="review-stage"
             >
-              {{ directoryError }}
-            </p>
-            <div class="location-footer">
-              <span class="muted">已有同名目录时不会覆盖</span>
-              <div>
-                <button
-                  v-if="directory !== defaultDirectory || !directory"
-                  type="button"
-                  :disabled="directoryBusy"
-                  @click="useDefaultDirectory"
-                >
-                  使用默认位置
-                </button>
-                <button
-                  type="button"
-                  :disabled="directoryBusy"
-                  @click="chooseDirectory"
-                >
-                  更改位置
-                </button>
-              </div>
+              <strong>
+                {{ phase.name }} · {{ draft.stages[index]!.dueDate || '未设交付日期' }}
+              </strong>
+              <p
+                v-for="role in phase.roles"
+                :key="role"
+              >
+                {{ role }}：{{ draft.stages[index]!.people[role]?.join('、') || '待添加' }}
+              </p>
             </div>
-          </section>
-          <template v-else>
-            <p class="muted preserve-text">
-              项目目录：{{ project.rootDirectory }}
-              <br />
-              修改名称不会重命名磁盘目录。需要重新关联目录时，请在项目详情中选择“重新定位”。
-            </p>
-          </template>
-        </div>
+            <section
+              v-if="!project"
+              class="project-location"
+            >
+              <div class="location-heading">
+                <span class="location-icon"><FolderOpen :size="22" /></span>
+                <div>
+                  <h3>项目存放位置</h3>
+                  <p>
+                    {{
+                      directory === defaultDirectory && directory
+                        ? '系统文档文件夹 · 默认位置'
+                        : '自定义位置'
+                    }}
+                  </p>
+                </div>
+                <span
+                  v-if="directory === defaultDirectory && directory"
+                  class="location-badge"
+                >
+                  默认
+                </span>
+              </div>
+              <label class="location-path">
+                <span class="sr-only">项目存放位置</span>
+                <input
+                  :value="directory"
+                  readonly
+                  :placeholder="directoryBusy ? '正在准备默认目录…' : '请选择可写的存放位置'"
+                />
+              </label>
+              <div class="location-preview">
+                <Folder :size="16" />
+                <span>独立项目文件夹</span>
+                <span class="muted">内含 5 个阶段文件夹</span>
+              </div>
+              <p
+                v-if="directoryError"
+                role="alert"
+                class="error-text"
+              >
+                {{ directoryError }}
+              </p>
+              <div class="location-footer">
+                <span class="muted">已有同名目录时不会覆盖</span>
+                <div>
+                  <button
+                    v-if="directory !== defaultDirectory || !directory"
+                    type="button"
+                    :disabled="directoryBusy"
+                    @click="useDefaultDirectory"
+                  >
+                    使用默认位置
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="directoryBusy"
+                    @click="chooseDirectory"
+                  >
+                    更改位置
+                  </button>
+                </div>
+              </div>
+            </section>
+            <template v-else>
+              <p class="muted preserve-text">
+                项目目录：{{ project.rootDirectory }}
+                <br />
+                修改名称不会重命名磁盘目录。需要重新关联目录时，请在项目详情中选择“重新定位”。
+              </p>
+            </template>
+          </div>
+        </MotionView>
         <p
           v-if="error"
           class="error-text"
@@ -687,19 +710,22 @@ async function save() {
 .cover-field {
   min-width: 0;
 }
-.cover-heading {
+.field-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 9px;
+  font-size: 13px;
   font-weight: 500;
 }
-.cover-optional {
+.cover-field > .field-heading {
+  margin-bottom: 9px;
+}
+.optional-badge {
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 400;
-  background: #eef1f6;
-  border-radius: 5px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-small);
   padding: 1px 6px;
 }
 .cover-upload {
@@ -707,8 +733,8 @@ async function save() {
   grid-template-columns: 170px minmax(0, 1fr);
   gap: 24px;
   padding: 20px;
-  border: 1px solid #e1e7f0;
-  border-radius: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
   background: linear-gradient(120deg, #f5f8fe, #fcfdff 70%);
   transition:
     border-color 0.18s,
@@ -730,7 +756,7 @@ async function save() {
   padding: 0;
   overflow: hidden;
   border: 1px solid #dbe4f2;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   background:
     radial-gradient(circle at 15% 15%, #fff9, transparent 65%),
     linear-gradient(135deg, #e7eefa, #d6dff0);

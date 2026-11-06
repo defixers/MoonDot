@@ -5,6 +5,8 @@ import { useRoute } from 'vue-router'
 import { NAlert, NButton, NConfigProvider, zhCN, dateZhCN } from 'naive-ui'
 import { useWorkspaceStore } from './stores/workspace'
 import GlobalSearch from './components/GlobalSearch.vue'
+import MotionView from './components/MotionView.vue'
+import { theme } from './styles/theme'
 const workspace = useWorkspaceStore()
 const route = useRoute()
 const content = ref<HTMLElement>()
@@ -15,18 +17,7 @@ onMounted(workspace.load)
   <NConfigProvider
     :locale="zhCN"
     :date-locale="dateZhCN"
-    :theme-overrides="{
-      common: {
-        primaryColor: '#2563EB',
-        primaryColorHover: '#1D4ED8',
-        primaryColorPressed: '#1E40AF',
-        successColor: '#12805C',
-        warningColor: '#B45309',
-        errorColor: '#B42318',
-        borderRadius: '8px',
-        fontFamily: 'inherit',
-      },
-    }"
+    :theme-overrides="theme"
   >
     <a
       class="skip-link"
@@ -141,7 +132,17 @@ onMounted(workspace.load)
               重试连接
             </NButton>
           </NAlert>
-          <RouterView />
+          <RouterView v-slot="{ Component, route: pageRoute }">
+            <MotionView
+              :active-key="pageRoute.path"
+              kind="page"
+            >
+              <component
+                :is="Component"
+                :key="pageRoute.path"
+              />
+            </MotionView>
+          </RouterView>
         </main>
       </div>
     </div>

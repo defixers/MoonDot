@@ -7,6 +7,10 @@ import './styles/tokens.css'
 
 const router = createRouter({
   history: createWebHashHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (to.path === from.path) return false
+    return savedPosition ?? { top: 0, left: 0, behavior: 'instant' }
+  },
   routes: [
     { path: '/', component: () => import('./views/HomeView.vue'), meta: { title: '工作台' } },
     {

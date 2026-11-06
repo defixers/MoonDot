@@ -1,0 +1,41 @@
+import type { GlobalThemeOverrides } from 'naive-ui'
+
+// Match the shared CSS tokens so library controls and native controls share one visual language.
+export const theme: GlobalThemeOverrides = {
+  common: {
+    primaryColor: '#2563EB',
+    primaryColorHover: '#1D4ED8',
+    primaryColorPressed: '#1E40AF',
+    successColor: '#12805C',
+    warningColor: '#B45309',
+    errorColor: '#B42318',
+    bodyColor: '#F5F7FB',
+    cardColor: '#FFFFFF',
+    modalColor: '#FFFFFF',
+    borderColor: '#E3E8F0',
+    textColorBase: '#202C3E',
+    textColor1: '#202C3E',
+    textColor2: '#59677D',
+    textColor3: '#758399',
+    borderRadius: '10px',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    heightMedium: '40px',
+    heightSmall: '32px',
+    heightLarge: '44px',
+  },
+  Card: {
+    borderRadius: '16px',
+    titleFontWeight: '600',
+    titleFontSizeSmall: '15px',
+    titleFontSizeMedium: '16px',
+    titleFontSizeLarge: '18px',
+    paddingSmall: '20px',
+    paddingMedium: '24px',
+    paddingLarge: '24px',
+  },
+  Button: { fontSizeMedium: '13px', fontWeight: '500', borderRadiusMedium: '10px' },
+  Input: { fontSizeMedium: '13px', border: '1px solid #D6DEEA', borderRadius: '10px' },
+  Form: { labelFontSizeTopMedium: '13px', labelFontWeight: '500' },
+  Tag: { borderRadius: '6px' },
+}

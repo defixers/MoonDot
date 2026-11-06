@@ -22,12 +22,33 @@ test('设置通过主进程持久化，重启保留窗口状态并展示许可�
   try {
     application = await electron.launch({ args: [resolve('.')], env })
     let page = await application.firstWindow()
+    if (process.platform !== 'darwin') {
+      expect(
+        await application.evaluate(({ BrowserWindow }) => {
+          const window = BrowserWindow.getAllWindows()[0]!
+          return { autoHide: window.isMenuBarAutoHide(), visible: window.isMenuBarVisible() }
+        }),
+      ).toEqual({ autoHide: true, visible: false })
+    }
     await expect(page.getByTestId('database-status')).toHaveText('本地数据库已连接')
     await page.getByRole('link', { name: '跳转到主要内容' }).focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('#main-content')).toBeFocused()
     await page.getByRole('link', { name: '设置', exact: true }).click()
     await page.getByLabel('显示名', { exact: true }).fill('月句测试音乐人')
+    await page
+      .getByLabel('显示名', { exact: true })
+      .press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a')
+    expect(
+      await page.getByLabel('显示名', { exact: true }).evaluate((el) => {
+        const input = el as unknown as {
+          selectionStart: number
+          selectionEnd: number
+          value: string
+        }
+        return input.selectionStart === 0 && input.selectionEnd === input.value.length
+      }),
+    ).toBe(true)
     await page.getByRole('button', { name: '保存设置' }).click()
     await expect(page.getByRole('status')).toHaveText('设置已保存')
     const invalid = await page.evaluate(() =>

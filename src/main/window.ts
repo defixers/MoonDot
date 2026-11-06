@@ -26,7 +26,8 @@ export function createMainWindow(
     minWidth: 1180,
     minHeight: 760,
     show: false,
-    backgroundColor: '#F5F6F8',
+    backgroundColor: '#F5F7FB',
+    autoHideMenuBar: process.platform !== 'darwin',
     title: '月句 MoonDot',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -35,6 +36,7 @@ export function createMainWindow(
       sandbox: true,
     },
   })
+  if (process.platform !== 'darwin') window.setMenuBarVisibility(false)
   window.once('ready-to-show', () => {
     if (state.maximized) window.maximize()
     window.show()

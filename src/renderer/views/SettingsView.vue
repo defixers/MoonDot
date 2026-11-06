@@ -80,7 +80,7 @@ async function save() {
   </NCard>
   <NCard
     title="素材与核心备份"
-    class="notice"
+    class="settings-card notice"
   >
     <p>项目文件存放位置在创建时选择，也可在项目详情重新定位。核心备份尚未开放配置。</p>
     <p class="muted">

@@ -1,16 +1,24 @@
 :root {
-  --bg-canvas: #f5f6f8;
+  --bg-canvas: #f5f7fb;
   --bg-surface: #fff;
-  --bg-subtle: #f0f2f5;
-  --bg-sidebar: #0e1116;
-  --border: #e4e7ec;
-  --text-primary: #14171f;
-  --text-secondary: #606977;
+  --bg-subtle: #f1f4f9;
+  --bg-sidebar: #121b2b;
+  --border: #e3e8f0;
+  --border-control: #d6deea;
+  --text-primary: #202c3e;
+  --text-secondary: #59677d;
+  --text-muted: #758399;
+  --radius-control: 10px;
+  --radius-panel: 16px;
+  --radius-small: 6px;
+  --shadow-panel: 0 2px 8px #203c6505;
   --accent: #2563eb;
   --accent-soft: #eff4ff;
   --success: #12805c;
   --warning: #b45309;
   --danger: #b42318;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-control: 140ms;
   font-family:
     'Inter Variable', 'HarmonyOS Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei',
     sans-serif;
@@ -80,20 +88,26 @@ button:focus-visible {
   color: #9da7b8;
 }
 .nav-link {
+  transition:
+    background-color var(--motion-control) ease,
+    color var(--motion-control) ease;
   display: flex;
   align-items: center;
   gap: 14px;
   margin-bottom: 8px;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 500;
 }
 .nav-link:hover {
-  background: #1b2330;
+  background: #1c2940;
   color: white;
 }
 .nav-link.selected {
-  background: #1d2d4b;
-  color: #b4ceff;
+  background: #243a5f;
+  color: #d3e2ff;
+  box-shadow: inset 3px 0 #7ca8ff;
 }
 .sidebar-bottom {
   margin-top: auto;
@@ -117,7 +131,7 @@ button:focus-visible {
   min-width: 0;
 }
 .topbar {
-  height: 60px;
+  height: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-surface);
   display: flex;
@@ -157,13 +171,19 @@ main {
 }
 h1 {
   margin: 0 0 8px;
-  font-size: 24px;
-  line-height: 32px;
+  font-size: 26px;
+  line-height: 1.35;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 h2 {
-  font-size: 20px;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+h3 {
+  font-size: 14px;
   font-weight: 600;
 }
 p {
@@ -175,7 +195,7 @@ p {
 }
 .welcome-card {
   text-align: center;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
 }
 .welcome-symbol {
   width: 56px;
@@ -195,7 +215,10 @@ p {
   background: var(--accent);
   color: #fff;
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 500;
   margin: 8px 0 28px;
 }
 .primary-link:hover {
@@ -216,7 +239,16 @@ p {
   margin-top: 24px;
 }
 .settings-card {
-  max-width: 720px;
+  max-width: 860px;
+}
+.settings-card .n-form {
+  max-width: 600px;
+}
+.n-card:not(.n-modal) {
+  box-shadow: var(--shadow-panel);
+}
+.n-card__content > p:last-child {
+  margin-bottom: 0;
 }
 .saved-status {
   display: inline-block;
@@ -276,7 +308,11 @@ p {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -288,13 +324,21 @@ textarea {
 }
 button:not([class^='n-']) {
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 7px 12px;
+  border-radius: var(--radius-control);
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
   background: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
+  transition:
+    background-color var(--motion-control) ease,
+    border-color var(--motion-control) ease,
+    color var(--motion-control) ease,
+    box-shadow var(--motion-control) ease;
 }
-button:not([class^='n-']):hover {
+button:not([class^='n-']):hover:not(:disabled) {
   border-color: #a9bce5;
   background: var(--accent-soft);
 }
@@ -315,16 +359,35 @@ button.danger,
 .error-text {
   color: var(--danger);
 }
-input:not([type='checkbox']):not([class^='n-']),
+button.danger:hover:not(:disabled) {
+  background: #fff4f3;
+  border-color: #f0b8b3;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([class^='n-']),
 select,
 textarea {
-  border: 1px solid #d2d8e2;
+  border: 1px solid var(--border-control);
   background: white;
-  border-radius: 7px;
-  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  padding: 9px 12px;
+  font-size: 13px;
   width: 100%;
   min-width: 0;
   color: var(--text-primary);
+  transition:
+    border-color var(--motion-control) ease,
+    box-shadow var(--motion-control) ease;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([class^='n-']),
+select {
+  height: 40px;
+}
+textarea {
+  resize: vertical;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
 }
 input[type='color'] {
   height: 40px;
@@ -344,6 +407,7 @@ label {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
 }
 fieldset {
@@ -375,18 +439,31 @@ fieldset {
   gap: 12px;
   margin: 20px 0;
 }
+.project-filters {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-panel);
+}
+.project-filters > .muted {
+  margin-left: auto;
+  align-self: center;
+  font-size: 12px;
+}
 .toolbar label {
   flex: 1 1 125px;
   max-width: 220px;
 }
 .toolbar input,
 .toolbar select {
-  height: 36px;
+  height: 40px;
 }
 .surface {
   background: white;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
   padding: 24px;
   margin-bottom: 20px;
   min-width: 0;
@@ -461,7 +538,7 @@ fieldset {
   background: white;
   border: 1px dashed var(--border);
   padding: 48px 20px;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   color: var(--text-secondary);
 }
 .project-hero {
@@ -469,11 +546,16 @@ fieldset {
   gap: 24px;
   align-items: center;
   margin-top: 24px;
+  padding: 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
 }
 .project-hero > .project-cover {
   width: 100px;
   height: 100px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 .project-hero > div:nth-child(2) {
@@ -484,9 +566,12 @@ fieldset {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.search-trigger {
+button.search-trigger {
   color: var(--text-secondary);
   font-size: 12px;
+  background: var(--bg-subtle);
+  min-height: 36px;
+  border-color: transparent;
 }
 kbd {
   color: #8b94a3;
@@ -520,12 +605,16 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 .wizard-steps li {
+  transition: color var(--motion-control) ease;
   flex: 1;
   color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
 }
 .wizard-steps span {
+  transition:
+    background-color var(--motion-control) ease,
+    color var(--motion-control) ease;
   display: grid;
   place-items: center;
   width: 26px;
@@ -558,7 +647,7 @@ kbd {
   gap: 6px;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   background: #fff;
   text-align: left;
   cursor: pointer;
@@ -643,7 +732,14 @@ input[type='radio'] {
 }
 .stage-section {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
+  background: var(--bg-surface);
+}
+.stage-section[open] {
+  border-color: #bfcee6;
+}
+.stage-section[open] summary {
+  color: var(--accent);
 }
 summary {
   cursor: pointer;
@@ -686,6 +782,10 @@ summary {
   align-items: center;
   gap: 8px 16px;
   margin: 20px 0 28px;
+  padding: 18px 20px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
 }
 .directory-bar > div {
   flex: 1;
@@ -719,11 +819,16 @@ summary {
   margin: 20px 0;
 }
 .phase-tabs button {
+  transition:
+    background-color var(--motion-control) ease,
+    border-color var(--motion-control) ease,
+    color var(--motion-control) ease;
   text-align: left;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 14px;
+  border-radius: var(--radius-control);
 }
 .phase-tabs button.selected {
   border-color: var(--accent);
@@ -777,6 +882,16 @@ summary {
 .file-list-header {
   font-size: 12px;
   color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-small);
+}
+.file-list-header,
+.file-row {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.file-row:hover {
+  background: #f8faff;
 }
 .file-row > span {
   color: var(--text-secondary);
@@ -811,6 +926,7 @@ summary {
   background: transparent;
   color: var(--accent);
   text-align: left;
+  min-height: 0;
 }
 .file-actions {
   display: flex;
@@ -819,6 +935,8 @@ summary {
 }
 .file-actions button {
   padding: 3px 6px;
+  min-height: 30px;
+  border-radius: var(--radius-small);
 }
 .mobile-label {
   display: none;
@@ -932,7 +1050,7 @@ summary {
 }
 .schedule-list {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
   overflow: hidden;
 }
 .schedule-row {
@@ -974,7 +1092,7 @@ summary {
   padding: 20px 18px;
   background: #f3f7ff;
   border: 1px solid #dce7fc;
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
 }
 .deadline-card > div {
   display: flex;
@@ -993,7 +1111,7 @@ summary {
 }
 .project-location {
   border: 1px solid #dce5f3;
-  border-radius: 14px;
+  border-radius: var(--radius-panel);
   padding: 20px;
   background: #f8faff;
 }
@@ -1071,6 +1189,48 @@ summary {
   overflow: auto;
   scrollbar-gutter: stable;
   overflow-anchor: none;
+}
+.wizard-panels {
+  min-height: 340px;
+}
+.wizard-panels h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.trash-list .surface {
+  padding: 22px 24px;
+}
+.trash-list .project-directory {
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+}
+.form-actions {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+/* Keep every application dialog close to its final size instead of zooming from 50%. */
+.n-modal:is(.editor-modal, .search-modal).fade-in-scale-up-transition-enter-from,
+.n-modal:is(.editor-modal, .search-modal).fade-in-scale-up-transition-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+}
+.n-modal:is(.editor-modal, .search-modal).fade-in-scale-up-transition-enter-active {
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms var(--motion-ease);
+}
+.n-modal:is(.editor-modal, .search-modal).fade-in-scale-up-transition-leave-active {
+  transition:
+    opacity 140ms ease-in,
+    transform 140ms ease-in;
+  pointer-events: none;
+}
+.n-modal-mask.fade-in-transition-enter-active {
+  transition-duration: 180ms;
+}
+.n-modal-mask.fade-in-transition-leave-active {
+  transition-duration: 140ms;
 }
 .file-list-viewport .empty-state {
   min-height: 230px;

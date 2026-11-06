@@ -11,12 +11,14 @@ import {
   type Project,
 } from '../../shared/work'
 import { displayTime, result, work } from '../work'
+import MotionView from './MotionView.vue'
 const props = defineProps<{ project: Project }>()
 const phase = ref<PhaseKey>('planning'),
   directory = ref(''),
   listing = ref<FileListing>(),
   error = ref('')
 const busy = ref(false),
+  viewport = ref<HTMLElement>(),
   job = ref<ImportJob>(),
   loading = ref(false)
 const operation = ref<'' | 'create' | 'rename' | 'trash'>(''),
@@ -32,6 +34,13 @@ const location = () => ({
   stage: phase.value,
   directory: directory.value,
 })
+watch(
+  () => listing.value?.path,
+  () => {
+    viewport.value?.scrollTo({ top: 0, behavior: 'instant' })
+  },
+  { flush: 'post' },
+)
 let refreshTimer: ReturnType<typeof setInterval>,
   jobTimer: ReturnType<typeof setInterval>,
   sequence = 0,
@@ -324,7 +333,10 @@ const size = (bytes: number) =>
           </li>
         </ul>
       </section>
-      <div class="file-list-viewport">
+      <div
+        ref="viewport"
+        class="file-list-viewport"
+      >
         <div
           v-if="loading"
           class="file-loading"
@@ -332,79 +344,84 @@ const size = (bytes: number) =>
         >
           正在读取目录…
         </div>
-        <p
-          v-if="listing && !listing.entries.length"
-          class="empty-state"
+        <MotionView
+          :active-key="listing?.path ?? ''"
+          kind="panel"
         >
-          {{ directory ? '文件夹为空' : '把这一阶段的文件放在这里' }}
-        </p>
-        <div
-          v-if="listing?.entries.length"
-          class="file-list"
-        >
-          <div class="file-list-header">
-            <span>名称</span>
-            <span>修改时间</span>
-            <span>加入项目时间</span>
-            <span>操作</span>
-          </div>
-          <div
-            v-for="entry in listing?.entries"
-            :key="entry.name"
-            class="file-row"
+          <p
+            v-if="listing && !listing.entries.length"
+            class="empty-state"
           >
-            <div class="file-name">
-              <component
-                :is="entry.directory ? Folder : File"
-                :size="22"
-              />
-              <div>
+            {{ directory ? '文件夹为空' : '把这一阶段的文件放在这里' }}
+          </p>
+          <div
+            v-if="listing?.entries.length"
+            class="file-list"
+          >
+            <div class="file-list-header">
+              <span>名称</span>
+              <span>修改时间</span>
+              <span>加入项目时间</span>
+              <span>操作</span>
+            </div>
+            <div
+              v-for="entry in listing?.entries"
+              :key="entry.name"
+              class="file-row"
+            >
+              <div class="file-name">
+                <component
+                  :is="entry.directory ? Folder : File"
+                  :size="22"
+                />
+                <div>
+                  <button
+                    v-if="entry.directory"
+                    class="text-button"
+                    :disabled="locked"
+                    @click="enter(entry.name)"
+                  >
+                    {{ entry.name }}
+                  </button>
+                  <strong v-else>{{ entry.name }}</strong>
+                  <small>{{ entry.directory ? '文件夹' : size(entry.size) }}</small>
+                </div>
+              </div>
+              <span>
+                <small class="mobile-label">修改时间</small>
+                {{ displayTime(entry.modifiedAt) }}
+              </span>
+              <span>
+                <small class="mobile-label">加入项目</small>
+                {{ displayTime(entry.addedAt) }}
+              </span>
+              <div class="file-actions">
                 <button
-                  v-if="entry.directory"
-                  class="text-button"
-                  :disabled="locked"
-                  @click="enter(entry.name)"
+                  :disabled="locked || !writable"
+                  :aria-label="`重命名 ${entry.name}`"
+                  @click="dialog('rename', entry.name)"
                 >
-                  {{ entry.name }}
+                  重命名
                 </button>
-                <strong v-else>{{ entry.name }}</strong>
-                <small>{{ entry.directory ? '文件夹' : size(entry.size) }}</small>
+                <button
+                  :disabled="locked || !writable"
+                  :aria-label="`删除 ${entry.name}`"
+                  @click="dialog('trash', entry.name)"
+                >
+                  删除
+                </button>
+                <button
+                  :aria-label="`在文件夹中显示 ${entry.name}`"
+                  @click="
+                    perform(() => result(work().revealFile({ ...location(), name: entry.name })))
+                  "
+                >
+                  在文件夹中显示
+                </button>
               </div>
             </div>
-            <span>
-              <small class="mobile-label">修改时间</small>
-              {{ displayTime(entry.modifiedAt) }}
-            </span>
-            <span>
-              <small class="mobile-label">加入项目</small>
-              {{ displayTime(entry.addedAt) }}
-            </span>
-            <div class="file-actions">
-              <button
-                :disabled="locked || !writable"
-                :aria-label="`重命名 ${entry.name}`"
-                @click="dialog('rename', entry.name)"
-              >
-                重命名
-              </button>
-              <button
-                :disabled="locked || !writable"
-                :aria-label="`删除 ${entry.name}`"
-                @click="dialog('trash', entry.name)"
-              >
-                删除
-              </button>
-              <button
-                :aria-label="`在文件夹中显示 ${entry.name}`"
-                @click="
-                  perform(() => result(work().revealFile({ ...location(), name: entry.name })))
-                "
-              >
-                在文件夹中显示
-              </button>
-            </div>
           </div>
-        </div>
+        </MotionView>
       </div>
     </div>
   </section>

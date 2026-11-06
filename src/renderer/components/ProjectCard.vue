@@ -118,10 +118,10 @@ const createdDate = computed(() =>
   flex-direction: column;
   min-width: 0;
   padding: 9px 9px 0;
-  border: 1px solid #e3e8f0;
-  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
   background: var(--bg-surface);
-  box-shadow: 0 2px 4px #17274203;
+  box-shadow: var(--shadow-panel);
   transition:
     border-color 0.18s,
     box-shadow 0.18s,
@@ -153,7 +153,7 @@ const createdDate = computed(() =>
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border-radius: 11px;
+  border-radius: var(--radius-control);
   background: var(--artwork-start);
   isolation: isolate;
 }
@@ -280,7 +280,7 @@ const createdDate = computed(() =>
   font-size: 18px;
   line-height: 1.45;
   font-weight: 600;
-  color: #202c3e;
+  color: var(--text-primary);
   letter-spacing: -0.2px;
 }
 .card-dates {
